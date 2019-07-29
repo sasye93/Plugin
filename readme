@@ -1,0 +1,4 @@
+
+requirements:
+- package structure must fit to folder structure, e.g. package.sub.class1 must be inside package/sub/
+- entry points must have same name as peer an be inside same package, but not nested in class, e.g. entry point of package.sub.parentClass$PeerClass must be package.sub.PeerClass
