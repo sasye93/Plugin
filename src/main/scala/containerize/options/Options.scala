@@ -18,8 +18,23 @@ package object Options {
   var saveimages : Boolean = false
   var stage : Stage = run
 
+  var nocache : Boolean = false
+
+  var dockerUsername : String = ""
+  var dockerPassword : String = ""
+  var dockerHost : String = "localhost:8000"
+
+  val defaultContainerPort = 0
+  val defaultContainerHost = "127.0.0.1"
+  val defaultContainerVersion = "1.0"
+
   //todo not good
   val targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
+  val unixLibraryPathPrefix : String = "/var/lib/libs/"
+
+  val libraryBaseImageTag : String = "loci-containerize-library-base"
+
+  val jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
 
   def processOptions(options: List[String], error: String => Unit): Unit = {
     for(option <- options){
@@ -30,6 +45,13 @@ package object Options {
         case "save-images" => Options.saveimages = true
         case "nojar" => Options.jar = false
         case "usejdk" => Options.usejdk = true
+        case "noinfo" => ;
+
+        case "no-cache" => Options.nocache = true
+
+        case "user" => Options.dockerUsername = option
+        case "password" => Options.dockerPassword = option
+        case "host" => Options.dockerHost = option
         case _ => error("unknown option supplied: " + option)
       }
     }

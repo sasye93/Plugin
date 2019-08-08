@@ -4,20 +4,20 @@ import containerize.main.Containerize
 import containerize.options.Options
 import containerize.AST.TreeTraverser
 
-import scala.reflect.io.AbstractFile
 import scala.tools.nsc.{Global, Phase}
 import scala.tools.nsc.plugins.PluginComponent
 
-class AnalyzeComponent[G <: Global](val global : G, val plugin : Containerize) extends PluginComponent {
+class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) extends PluginComponent {
 
-  import global._
   import plugin._
+  import global._
 
   val component: PluginComponent = this
 
-  override val runsAfter : List[String] = List[String]("delambdafy")
-  //override val runsRightAfter: Option[String] = Some("typer")
-  override val runsBefore : List[String] = List[String]("jvm")
+  //after namer phase, module defs are still available... keep in mind
+  override val runsAfter : List[String] = List[String]("lambdalift")//needs cleanup global access!but flatten erases inner classes..
+  //override val runsRightAfter: Option[String] = Some("lambdalift")
+  override val runsBefore : List[String] = List[String]("flatten")//delambdafy
   override val phaseName : String = plugin.name + "-analyze"
 
   //todo we could use a if here to see what phases already ran and decide right phase, not needing 2 components?
@@ -45,13 +45,19 @@ class AnalyzeComponent[G <: Global](val global : G, val plugin : Containerize) e
                 reporter.error(null, "no class files found at " + workDir.getAbsoluteFile)
       */
 
+      scala.reflect.runtime.universe
+
+
+      reporter.warning(null, "DXXX : " + showRaw(reify({def test : Integer = 1})))
+      reporter.warning(null, "DXXX1 : " + showRaw(reify({val test : Integer = 1})))
       reporter.warning(null, "CU DEPEND: " + unit.depends.toString)
 
       traverser.traverse(unit.body)
       traverser.dependencies()
       //traverser.ClassDefs.foreach(x => global.reporter.warning(null, x.classSymbol.javaClassName + x.parentType.toString))
 
-      if(!ClassDefs.exists(_.isPeer)) reporter.warning(null, "no peer classes found.")
+      global.cleanup.getEntryPoints.foreach(x=>reporter.info(null, "§entrys: " + x, true))
+      if(plugin.PeerDefs.isEmpty) reporter.warning(null, "no peer classes found.")
 
       import java.nio.file._
 
