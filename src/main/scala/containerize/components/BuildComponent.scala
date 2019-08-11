@@ -8,11 +8,12 @@ import containerize.IO.IO
 import containerize.main.Containerize
 import containerize.types.TempLocation
 
-import scala.collection.mutable
 import scala.tools.nsc.plugins.PluginComponent
 import scala.reflect.internal.Phase
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.Global
+
+import containerize.Options
 
 class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) extends PluginComponent{
 
@@ -32,7 +33,7 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
 
   class BuildPhase(prev: Phase) extends StdPhase(prev) {
 
-    override def name = phaseName
+    override def name: String = phaseName
 
     val executed : AtomicBoolean = new AtomicBoolean()
 
@@ -78,16 +79,16 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
         })
           */
 
-        def copyToTempDir(workDir : File = plugin.workDir, entryPoints : collection.immutable.Map[plugin.global.ClassSymbol, TEntryPointImplDef] = EntryPointsImpls.toMap) : List[TempLocation] = {
+        def copyToTempDir(workDir : File = plugin.workDir, entryPoints : collection.immutable.Map[plugin.global.ClassSymbol, TEntryPointDef] = EntryPointsImpls.toMap) : List[TempLocation] = {
           import java.io._
 
           var locs : List[TempLocation] = List[TempLocation]()
           try{
             val tempPath = Files.createTempDirectory(Paths.get(workDir.getAbsolutePath), "_LOCI_CONTAINERIZE_")
 
-            def copy(entryPoint : TEntryPointImplDef) : Unit = {
+            def copy(entryPoint : TEntryPointDef) : Unit = {
               import java.nio.file.StandardCopyOption._
-              val tempSubPath = Files.createTempDirectory(tempPath, "_" + entryPoint._containerEntryClass.fullName + "_" + entryPoint._containerPeerClass.fullName)
+              val tempSubPath = Files.createTempDirectory(tempPath, "_" + entryPoint.containerEntryClass.fullName + "_" + entryPoint.containerPeerClass.fullName)
 
               io.copyContentOfDirectory(workDir.toPath, Paths.get(tempSubPath.toString, "classfiles"), true, "_LOCI_CONTAINERIZE_")
               /**
@@ -115,7 +116,7 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
               */
               //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
 
-              locs = locs :+ TempLocation(entryPoint._containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, tempSubPath, entryPoint.asSimpleMap())
+              locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, tempSubPath, entryPoint.asSimplifiedEntryPoints())
               //tempSubPath.toFile.deleteOnExit()
             }
 
@@ -133,8 +134,7 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
 
         val locs = copyToTempDir()
 
-        val builder = new containerize.build.Builder(plugin)(reporter).getBuilder(locs, Paths.get(workDir.getAbsolutePath))
-        val runner : containerize.build.Runner = new containerize.build.Runner(reporter)
+        val builder = new containerize.build.Builder(plugin)(logger).getBuilder(locs, Paths.get(workDir.getAbsolutePath))
 
         /**
         val depends = io.listDependencies(Paths.get("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\examples-simple-master2\\lib_managed"))
@@ -148,11 +148,13 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
         builder.buildJARS(depends)
         builder.buildCMDExec()
         builder.buildDockerFiles()
-        builder.buildDockerImages()
-        //runner.runContainer(null)
 
-        if(containerize.options.Options.stage.id > 1 && false)
+        if(Options.stage >= Options.image)
           builder.buildDockerImages()
+        if(Options.stage >= Options.publish)
+          builder.publishImagesToRepo()
+        //if(Options.stage.id > 2)
+          //runner.runContainer(null)
       }
     }
   }

@@ -1,17 +1,20 @@
 package containerize.main
 
 import java.io.File
-import java.nio.file.{Path, Paths}
+import java.nio.file.Paths
+
+import containerize.IO.Logger
+import containerize.build.Runner
 
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
 import scala.tools.nsc.{Global, util}
-import containerize.options.Options
+import containerize.Options
 
 import scala.collection.mutable
 
 /**
-  * you can provide parameters using "-P:containerize:<param>"
+  * you can provide options using "-P:containerize:<opt1>,<opt2>,..."
   *
   */
 
@@ -20,7 +23,7 @@ import scala.collection.mutable
 //todo output puth not hardcoded
 //todo bat is windows, use .sh?
 
-class Containerize(val global: Global) extends Plugin {
+class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   import global._
 
   val name = "containerize"
@@ -33,12 +36,14 @@ class Containerize(val global: Global) extends Plugin {
   val workDir : File = Paths.get(global.settings.outputDirs.getSingleOutput.getOrElse(Options.targetDir).toString).toFile
   val classPath : util.ClassPath = global.classPath
 
-  //todo rename peerdefs
+  val logger : Logger = new Logger(global.reporter)
+  val runner : Runner = new Runner(logger)
+
   var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
-  var EntryPointsImpls : mutable.HashMap[ClassSymbol, TEntryPointImplDef] = mutable.HashMap[ClassSymbol, TEntryPointImplDef]()
+  var EntryPointsImpls : mutable.HashMap[ClassSymbol, TEntryPointDef] = mutable.HashMap[ClassSymbol, TEntryPointDef]()
 
   type TAbstractClassDef = AbstractClassDef[Type, TypeName, Symbol]
-  type TEntryPointImplDef = loci.container.ContainerEntryPointImpl[Global]
+  type TEntryPointDef = loci.container.ContainerEntryPoint[Global]
 
   //todo classfiles as ref?
   //todo replace null with option
@@ -52,7 +57,24 @@ class Containerize(val global: Global) extends Plugin {
                                //classFiles : List[AbstractClassDef[Type, TypeName, Symbol]] = List() //currently unused
                              )
 
-  override def processOptions(options: List[String], error: String => Unit): Unit = Options.processOptions(_,_)
+  override def init(options: List[String], error: String => Unit): Boolean = {
+    processOptions(options, error)
+    if(runner.dockerRun()){
+      runner.dockerCleanup()
+      runner.dockerLogin()
+      true
+    }
+    else false
+  }
+  override def close() : Unit = {
+    if(runner.dockerIsRunning()){
+      runner.dockerLogout()
+    }
+  }
+  override def processOptions(options: List[String], error: String => Unit): Unit = {
+    Options.processOptions(options, error)
+    Options.checkConstraints(logger)
+  }
   override val optionsHelp = Some("todo")
 
   object toolbox{

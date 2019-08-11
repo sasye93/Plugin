@@ -47,7 +47,7 @@ class IO(parent : Containerize) {
     finally{
     }
   }
-  @deprecated("does this work???")
+  @deprecated("does this work???", "")
   def createFolderStructure(createPath : Path) : Unit = {
     try{
       if(!new File(createPath.toUri).isDirectory)

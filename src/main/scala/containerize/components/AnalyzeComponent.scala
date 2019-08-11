@@ -1,7 +1,7 @@
 package containerize.components
 
 import containerize.main.Containerize
-import containerize.options.Options
+import containerize.Options
 import containerize.AST.TreeTraverser
 
 import scala.tools.nsc.{Global, Phase}
@@ -9,7 +9,6 @@ import scala.tools.nsc.plugins.PluginComponent
 
 class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) extends PluginComponent {
 
-  import plugin._
   import global._
 
   val component: PluginComponent = this

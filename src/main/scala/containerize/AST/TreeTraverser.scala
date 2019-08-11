@@ -1,13 +1,11 @@
 package containerize.AST
 
 import containerize.main.Containerize
-import containerize.options.Options
-import loci.PeerType
-import loci.container.ContainerEntryPointImpl
+import containerize.Options
+import loci.container.ContainerEntryPoint
 
-import scala.collection.mutable
-import scala.reflect.io.AbstractFile
 import scala.tools.nsc.Global
+import scala.language.implicitConversions
 
 class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize) {
 
@@ -23,13 +21,14 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
     TreeTraverser.traverse(tree.asInstanceOf[this.global.Tree])
   }
   implicit def pClassSymbolConvert(c : this.global.ClassSymbol) : plugin.global.ClassSymbol = c.asInstanceOf[plugin.global.ClassSymbol]
-  val dependencies : () => Unit = TreeTraverser.dependencies
+  val dependencies : () => Unit = () => TreeTraverser.dependencies()
 
-  def parentHasContainerizeAnnot(c : Symbol) : Boolean = {
+  def isPeer(c : ClassDef) : Boolean = c.impl.parents.map(_.tpe).exists(_ =:= PeerType)
+  def topLevelClassHasContainerizationAnnot(c : Symbol) : Boolean = {
     val parentClass = if(c.isClass) c.safeOwner.enclClass else c.enclClass
 
     parentClass != null && parentClass != NoSymbol &&
-      (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.Containerized]) || parentHasContainerizeAnnot(parentClass))
+      (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.Containerized]) || topLevelClassHasContainerizationAnnot(parentClass))
   }/**
   def getEntryPointBaseClass(c : Symbol) : Symbol = {
     val parentClass = if(c.isClass) c.safeOwner.enclClass else c.enclClass
@@ -51,11 +50,11 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
   def getEntryPointsKeyBySubclass(subClass : ClassSymbol): Symbol = {
     EntryPointsImpls.keys.collectFirst{case c if subClass.isSubClass(c) => c }.getOrElse(NoSymbol).asInstanceOf[global.Symbol]
   }
-  def getOrUpdateEntryPointsImpl(className : ClassSymbol): TEntryPointImplDef = {
+  def getOrUpdateEntryPointsImpl(className : ClassSymbol): TEntryPointDef = {
     //todo better
-    EntryPointsImpls.getOrElseUpdate(className, new ContainerEntryPointImpl(global)())
+    EntryPointsImpls.getOrElseUpdate(className, new ContainerEntryPoint(global)())
   }
-  def updateEntryPointsImpl(className : ClassSymbol, cep : TEntryPointImplDef) : Unit = {
+  def updateEntryPointsImpl(className : ClassSymbol, cep : TEntryPointDef) : Unit = {
     //todo better
     EntryPointsImpls.update(className, cep)
   }
@@ -239,13 +238,12 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
       case c @ ClassDef(_, className, _, impl: Template) => impl match {
         case Template(parents, _, body) =>
 
-          val pars = parents.map(_.tpe)
-          if(parentHasContainerizeAnnot(c.symbol) && pars.exists(_ =:= PeerType)){
+          if(topLevelClassHasContainerizationAnnot(c.symbol) && isPeer(c)){
             PeerDefs += new TAbstractClassDef(
               c.symbol.enclosingPackage.javaClassName,
               className.asInstanceOf[plugin.global.TypeName],
               c.symbol.asInstanceOf[plugin.global.Symbol],
-              pars.map(_.asInstanceOf[plugin.global.Type])
+              parents.map(_.tpe.asInstanceOf[plugin.global.Type])
             )
           }
           //todo
@@ -270,33 +268,34 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
 
             val cep = getOrUpdateEntryPointsImpl(c.symbol.asClass)
 
+            reporter.info(null, showRaw(c) ,true)
             val trees =
-              body.map(b => b.filter({
+              body.flatMap(b => b.filter({
                 case Apply(fun, _) => fun match {
                   case Select(_, TermName(n)) => n == "run";
                   case _ => false
                 }
                 case _ => false
-              })).flatten.map(a => a.filter({
+              })).flatMap(a => a.filter({
                 case Select(_, TermName(n)) => n == "peerTypeTag"
                 case _ => false
-              })).flatten.map({
+              })).map({
                 case s@Select(qual, _) => qual
               })
             trees.foreach({
               case s: Select =>
-                cep._containerPeerClass = s.symbol.asInstanceOf[cep.global.Symbol]
-                cep._containerEntryClass = c.symbol.asInstanceOf[cep.global.Symbol]
+                cep.containerPeerClass = s.symbol.asInstanceOf[cep.global.Symbol]
+                cep.containerEntryClass = c.symbol.asInstanceOf[cep.global.Symbol]
             })
 
             val trees2 =
-              body.map(b => b.filter({
+              body.flatMap(b => b.filter({
                 case _ : ClassDef => true
                 case _ => false
-              })).flatten.map({ case c : ClassDef => c.impl.body }).map(a => a.filter({
+              })).map({ case c : ClassDef => c.impl.body }).flatMap(a => a.filter({
                 case d : DefDef => d.name.toString.startsWith("connect") || d.name.toString.startsWith("listen")
                 case _ => false
-              })).flatten
+              }))
 
             trees2.foreach({
               case d : DefDef => d.rhs match{
@@ -338,9 +337,9 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
 
       EntryPointsImpls = EntryPointsImpls.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
 
-      EntryPointsImpls = EntryPointsImpls.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2._containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
+      EntryPointsImpls = EntryPointsImpls.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
 
-      EntryPointsImpls.toList.foreach(x => reporter.info(null, "ENTRYSS: " + x._1.fullNameString + " - " + x._2._containerEntryClass.fullNameString + " - " + x._2._containerPeerClass.fullNameString + " :: " + x._2._containerEndPoints.foldLeft("")((e,d) => e + "||" + d.connectionPeer + "&" + d.port + "&" + d.version + "&" + d.way).toString, true))
+      EntryPointsImpls.toList.foreach(x => reporter.info(null, "ENTRYSS: " + x._1.fullNameString + " - " + x._2.containerEntryClass.fullNameString + " - " + x._2.containerPeerClass.fullNameString + " :: " + x._2.containerEndPoints.foldLeft("")((e, d) => e + "||" + d.connectionPeer + "&" + d.port + "&" + d.version + "&" + d.way).toString, true))
 
       /**
       EntryPoints = PeerDefs.map{
