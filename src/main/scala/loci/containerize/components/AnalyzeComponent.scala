@@ -1,14 +1,18 @@
-package containerize.components
+package loci.containerize.components
 
-import containerize.main.Containerize
-import containerize.Options
-import containerize.AST.TreeTraverser
+import loci.containerize.main.Containerize
+import loci.containerize.Options
+import loci.containerize.AST.{DependencyResolver, TreeTraverser}
 
 import scala.tools.nsc.{Global, Phase}
 import scala.tools.nsc.plugins.PluginComponent
 
-class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) extends PluginComponent {
+class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends PluginComponent {
 
+  implicit val global : Global = plugin.global
+  implicit val parent : C = plugin
+
+  import plugin._
   import global._
 
   val component: PluginComponent = this
@@ -32,8 +36,8 @@ class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) 
 
       //todo enthält classes path, ist aber Option => kein verlass? gibt auch setsingleoutput, evtl als fallback harcoded target path? hmm vll über flag steuern
 
-      val traverser : TreeTraverser[Global] = new TreeTraverser[Global](global, plugin)
-
+      val traverser : TreeTraverser[C] = new TreeTraverser[C]()
+      val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
 
       reporter.warning(null, global.settings.outputDirs.getSingleOutput.getOrElse(0).toString)
       reporter.warning(null, Options.targetDir.toString)
@@ -52,12 +56,14 @@ class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) 
       reporter.warning(null, "CU DEPEND: " + unit.depends.toString)
 
       traverser.traverse(unit.body)
-      traverser.dependencies()
+      dependencyResolver.dependencies()
       //traverser.ClassDefs.foreach(x => global.reporter.warning(null, x.classSymbol.javaClassName + x.parentType.toString))
 
       global.cleanup.getEntryPoints.foreach(x=>reporter.info(null, "§entrys: " + x, true))
+
       if(plugin.PeerDefs.isEmpty) reporter.warning(null, "no peer classes found.")
 
+      Options.containerize = plugin.PeerDefs.nonEmpty
       import java.nio.file._
 
       //check if trhow err if dir empty
@@ -76,7 +82,7 @@ class AnalyzeComponent[+C <: Containerize](val global : Global)(val plugin : C) 
       //alternative call: component.afterOwnPhase;component.global.exitingPhase(this){
 
 
-      //containerize.build.IO.clearTempDirs(locs)
+      //loci.containerize.build.IO.clearTempDirs(locs)
 
       //val t = unit.body
       //     global.reporter.warning(null, t.toString)

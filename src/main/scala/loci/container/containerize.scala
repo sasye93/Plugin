@@ -14,6 +14,7 @@ object ContainerizeImpl {
   def impl(c : whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
+    //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
       case ModuleDef(mods, name, impl) :: Nil => impl match{
         case Template(parents, self, body) =>
@@ -31,7 +32,7 @@ object ContainerizeImpl {
           }
           c.Expr[Any](ModuleDef(mods, name, Template(p, self, body)))
       }
-      case _ => c.abort(c.enclosingPosition, "Invalid annotation: @containerize must prepend module object.")
+      case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.containerize must prepend module object.")
     }
 
   }

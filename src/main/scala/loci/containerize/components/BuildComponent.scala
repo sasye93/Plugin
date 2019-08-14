@@ -1,29 +1,34 @@
-package containerize.components
+package loci.containerize.components
 
 import java.util.concurrent.atomic.AtomicBoolean
-import java.io.File
+import java.io._
 import java.nio.file.{Files, Path, Paths}
+import java.util.Calendar
 
-import containerize.IO.IO
-import containerize.main.Containerize
-import containerize.types.TempLocation
+import loci.containerize.AST.DependencyResolver
+import loci.containerize.IO.IO
+import loci.containerize.main.Containerize
+import loci.containerize.types.TempLocation
 
 import scala.tools.nsc.plugins.PluginComponent
 import scala.reflect.internal.Phase
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.Global
+import loci.containerize.Options
+import loci.containerize.container._
 
-import containerize.Options
+class BuildComponent[+C <: Containerize](implicit val plugin : C) extends PluginComponent{
 
-class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) extends PluginComponent{
+  implicit val global : Global = plugin.global
+  implicit val parent : C = plugin
 
   import plugin._
   import global._
-
   //type TAbstractClassDef = AbstractClassDef[plugin.global.Type, plugin.global.TypeName, plugin.global.Symbol]
 
-  val io : IO = new IO(plugin)
   val component: PluginComponent = this
+
+  private val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
 
   override val runsAfter : List[String] = List[String]("jvm")
   override val runsRightAfter: Option[String] = Some("jvm")
@@ -39,7 +44,7 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
 
     def apply(unit: CompilationUnit) : Unit ={
 
-      if(executed.compareAndSet(false, true)) {
+      if(Options.containerize && executed.compareAndSet(false, true)) {
         reporter.warning(null, "CALL END")
 
         def pathify(aClass : TAbstractClassDef) : TAbstractClassDef = {
@@ -79,20 +84,26 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
         })
           */
 
-        def copyToTempDir(workDir : File = plugin.workDir, entryPoints : collection.immutable.Map[plugin.global.ClassSymbol, TEntryPointDef] = EntryPointsImpls.toMap) : List[TempLocation] = {
-          import java.io._
+        //reporter.warning(null, global.genBCode.postProcessorFrontendAccess.getEntryPoints.toString)
 
-          var locs : List[TempLocation] = List[TempLocation]()
-          try{
-            val tempPath = Files.createTempDirectory(Paths.get(workDir.getAbsolutePath), "_LOCI_CONTAINERIZE_")
+        logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.containerDir.listFiles().foldLeft("")((b,s) => b + s.getName))
+        if(Options.cleanBuilds){
+          logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.containerDir.listFiles().toString)
+          //io.recursiveClearDirectory(plugin.containerDir)
+        }
+        io.recursiveClearDirectory(plugin.containerDir)
 
-            def copy(entryPoint : TEntryPointDef) : Unit = {
-              import java.nio.file.StandardCopyOption._
-              val tempSubPath = Files.createTempDirectory(tempPath, "_" + entryPoint.containerEntryClass.fullName + "_" + entryPoint.containerPeerClass.fullName)
+        var locs : List[TempLocation] = List[TempLocation]()
+        val buildPath = Files.createDirectory(Paths.get(plugin.containerDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString()))
 
-              io.copyContentOfDirectory(workDir.toPath, Paths.get(tempSubPath.toString, "classfiles"), true, "_LOCI_CONTAINERIZE_")
-              /**
-              ClassDefs.foreach(f => {
+        try{
+          def copy(entryPoint : TEntryPointDef) : Unit = {
+            import java.nio.file.StandardCopyOption._
+            val buildSubPath = Files.createDirectory(Paths.get(buildPath.toAbsolutePath.toString, entryPoint.getLocDenominator))
+
+            io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(buildSubPath.toAbsolutePath.toString, "classfiles"))
+            /**
+            ClassDefs.foreach(f => {
                 //reporter.warning(null, f.filePath.toString)
                 //reporter.warning(null, Paths.get(tempSubPath.toString, f.getName).toString)
 
@@ -111,50 +122,54 @@ class BuildComponent[+C <: Containerize](val global : Global)(val plugin : C) ex
                 val parentFiles = Paths.get(f.filePath.file.getParent, canonicalName)
                 if(Files.exists(parentFiles))
                   Files.copy(parentFiles, Paths.get(tempSubPath.toString, packageSubPath, canonicalName), REPLACE_EXISTING)
-*/
+              */
               })
               */
-              //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
+            //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
 
-              locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, tempSubPath, entryPoint.asSimplifiedEntryPoints())
-              //tempSubPath.toFile.deleteOnExit()
-            }
+            locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, buildSubPath, entryPoint.asSimplifiedEntryPoints())
+            //tempSubPath.toFile.deleteOnExit()
+          }
 
-            entryPoints.foreach(e => copy(e._2))
-          }
-          catch{
-            case e: IOException => reporter.error(null, "error creating temporary directory: " + e.printStackTrace)
-            case e: SecurityException => reporter.error(null, "security exception when trying to create temporary directory: " + e.printStackTrace)
-            case e: Throwable => reporter.error(null, "unknown error when creating temporary directory: " + e.printStackTrace)
-          }
-          locs
+          EntryPointsImpls.foreach(e => copy(e._2))
+        }
+        catch{
+          case e: IOException => reporter.error(null, "error creating temporary directory: " + e.printStackTrace)
+          case e: SecurityException => reporter.error(null, "security exception when trying to create temporary directory: " + e.printStackTrace)
+          case e: Throwable => reporter.error(null, "unknown error when creating temporary directory: " + e.printStackTrace)
         }
 
-        //reporter.warning(null, global.genBCode.postProcessorFrontendAccess.getEntryPoints.toString)
+        val network = new Network(plugin.io)(buildPath)
+        val builder = new Builder(plugin.io)(network).getBuilder(locs, buildPath.toFile)
+        val composer = new Compose(plugin.io).getComposer(locs, buildPath.toFile)
 
-        val locs = copyToTempDir()
-
-        val builder = new containerize.build.Builder(plugin)(logger).getBuilder(locs, Paths.get(workDir.getAbsolutePath))
-
-        /**
-        val depends = io.listDependencies(Paths.get("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\examples-simple-master2\\lib_managed"))
-                                      .filterNot(d => d.toAbsolutePath.endsWith("-source.jar"))
-          */
-          //todo excluding java home really ok? ext libs here are unique!
-        val depends : List[Path] = plugin.classPath.asClassPathString.split(";").toList.map(Paths.get(_)).filterNot(_.startsWith(System.getProperties.get("java.home").toString))
+        val depends : List[Path] = dependencyResolver.classPathDependencies()
 
         //plugin.classPath.asClassPathString
-        builder.collectLibraryDependencies(depends)
+        builder.collectLibraryDependencies(depends, buildPath)
         builder.buildJARS(depends)
         builder.buildCMDExec()
         builder.buildDockerFiles()
+        builder.distributeReadmeFiles(buildPath)
+        network.buildSetupScript()
+        network.buildNetwork()
 
-        if(Options.stage >= Options.image)
+        if(Options.stage >= Options.image){
+          builder.buildDockerBaseImageBuildScripts()
+          builder.buildDockerImageBuildScripts()
+          builder.buildDockerStartScripts()
+          builder.buildDockerStopScripts()
           builder.buildDockerImages()
-        if(Options.stage >= Options.publish)
-          builder.publishImagesToRepo()
+        }
+        if(Options.stage >= Options.publish){
+          builder.publishDockerImagesToRepo()
+          composer.buildDockerCompose()
+          //runner.Swarm.init()
+          //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
+        }
         //if(Options.stage.id > 2)
           //runner.runContainer(null)
+
       }
     }
   }

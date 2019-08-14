@@ -8,6 +8,7 @@ resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-compiler" % scalaVersion.value,
+  "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2",
 "de.tuda.stg" %% "scala-loci-lang" % "0.2.0",
 "de.tuda.stg" %% "scala-loci-serializer-upickle" % "0.2.0",
 "de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.2.0",

@@ -1,10 +1,14 @@
-package containerize.types
+package loci.containerize.types
 
 import java.nio.file.Path
 
-import loci.container.SimplifiedContainerEntryPoint
+import scala.annotation.meta.{getter, setter}
 
 case class TempLocation(classSymbol : String, tempPath : Path, entryPoint : SimplifiedContainerEntryPoint){
-  def getImageName : String = classSymbol.toLowerCase.replace("$", ".")//todo what i flast char is $, invlaid
+  def getImageName : String = loci.container.Tools.getIpString(classSymbol)
   def getJARName : String = { val name = getImageName.split('.'); name(name.length-1) }
+
+}
+case object TempLocation{
+
 }

@@ -21,7 +21,7 @@ reporter.warning(null, "ASSIGN: " + a + ":" + b+
 
 
           val ru = scala.reflect.runtime.universe
-                      val m = ru.runtimeMirror(typeOf[loci.container.ContainerEntryPoint].getClass.getClassLoader)
+                      val m = ru.runtimeMirror(typeOf[loci.containerize.types.ContainerEntryPoint].getClass.getClassLoader)
                       val aqSymbol = m.classSymbol(c.symbol.tpe.typeSymbol.getClass)
                       val instMirr = m.reflect(c.symbol.toType.typeSymbol.asClass.getClass)
 
@@ -43,7 +43,7 @@ reporter.warning(null, "ASSIGN: " + a + ":" + b+
                       reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx3" + instMirr.getClass)
                       reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx4" + instMirr.symbol.asClass)
                       reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx3" + instMirr.symbol.info.decls.toString())
-                      //reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx13" + d.baseClasses.find(t => t.asClass.fullName == "loci.container.ContainerEntryPoint").get)
+                      //reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx13" + d.baseClasses.find(t => t.asClass.fullName == "loci.containerize.types.ContainerEntryPoint").get)
                       reporter.warning(null, "xxxxxxxxxxxxxxxxxxxx42" + instMirr.symbol.info.members.toString())
 
                       val q = aqSymbol.info.decls.find(m => m.isMethod && m.name.toString == "containerPort").orNull

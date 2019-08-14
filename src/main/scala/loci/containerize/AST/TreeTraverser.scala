@@ -1,16 +1,22 @@
-package containerize.AST
+package loci.containerize.AST
 
-import containerize.main.Containerize
-import containerize.Options
-import loci.container.ContainerEntryPoint
+import java.nio.file.Paths
 
+import loci.containerize.IO.ContainerConfig
+import loci.containerize.main.Containerize
+import loci.containerize.Options
+import loci.containerize.types.ContainerEntryPoint
+
+import scala.collection.immutable.HashMap
 import scala.tools.nsc.Global
 import scala.language.implicitConversions
 
-class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize) {
+class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
 
-  import global._
+  implicit val global : Global = plugin.global
+
   import plugin._
+  import global._
 
   type TAbstractClassDef = AbstractClassDef[plugin.global.Type, plugin.global.TypeName, plugin.global.Symbol]
 
@@ -20,8 +26,10 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
   def traverse[T >: Tree](tree : T) : Unit = {
     TreeTraverser.traverse(tree.asInstanceOf[this.global.Tree])
   }
+  implicit def pSymbolConvert(c : this.global.Symbol) : plugin.global.Symbol = c.asInstanceOf[plugin.global.Symbol]
+  implicit def gSymbolConvert(c : plugin.global.Symbol) : this.global.Symbol = c.asInstanceOf[this.global.Symbol]
   implicit def pClassSymbolConvert(c : this.global.ClassSymbol) : plugin.global.ClassSymbol = c.asInstanceOf[plugin.global.ClassSymbol]
-  val dependencies : () => Unit = () => TreeTraverser.dependencies()
+  implicit def gClassSymbolConvert(c : plugin.global.ClassSymbol) : this.global.ClassSymbol = c.asInstanceOf[this.global.ClassSymbol]
 
   def isPeer(c : ClassDef) : Boolean = c.impl.parents.map(_.tpe).exists(_ =:= PeerType)
   def topLevelClassHasContainerizationAnnot(c : Symbol) : Boolean = {
@@ -52,7 +60,7 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
   }
   def getOrUpdateEntryPointsImpl(className : ClassSymbol): TEntryPointDef = {
     //todo better
-    EntryPointsImpls.getOrElseUpdate(className, new ContainerEntryPoint(global)())
+    EntryPointsImpls.getOrElseUpdate(className, new ContainerEntryPoint()(plugin))
   }
   def updateEntryPointsImpl(className : ClassSymbol, cep : TEntryPointDef) : Unit = {
     //todo better
@@ -172,13 +180,13 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
         //or use owner, effective owner, safeowner, etc?
 
         reporter.warning(null, "obj:" + a.symbol.nameString + "class : " + a.symbol.enclClass.baseClasses + ":" +a.symbol.isOverride+":"+
-          (if(a.symbol.overrides.nonEmpty) (a.symbol.overrides.head.safeOwner.tpe =:= typeOf[loci.container.ContainerEntryPoint]) else null))
+          (if(a.symbol.overrides.nonEmpty) (a.symbol.overrides.head.safeOwner.tpe =:= typeOf[loci.containerize.types.ContainerEntryPoint]) else null))
 
         if(enclosingClass.baseClasses.exists(
-            _.tpe =:= typeOf[loci.container.ContainerEntryPoint])
+            _.tpe =:= typeOf[loci.containerize.types.ContainerEntryPoint])
             && a.symbol.isOverridingSymbol
             && a.symbol.overrides.exists(o => o.enclClass != null
-            && o.enclClass.tpe =:= typeOf[loci.container.ContainerEntryPoint])
+            && o.enclClass.tpe =:= typeOf[loci.containerize.types.ContainerEntryPoint])
           ){
 
           def transitiveSelect(s : Tree) : Symbol = s match{
@@ -249,9 +257,9 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
           //todo
 
           /** this will be detected atuom. by start use etc listen connect
-          if(pars.contains(typeOf[loci.container.ContainerEntryPoint])){
+          if(pars.contains(typeOf[loci.containerize.types.ContainerEntryPoint])){
 
-            reporter.warning(null, "EP MEMS: " + pars.find(_ =:= typeOf[loci.container.ContainerEntryPoint]).orNull.decls.filter(x => x.isOverridableMember).map(x => x.overridingSymbol(c.symbol)).toString)
+            reporter.warning(null, "EP MEMS: " + pars.find(_ =:= typeOf[loci.containerize.types.ContainerEntryPoint]).orNull.decls.filter(x => x.isOverridableMember).map(x => x.overridingSymbol(c.symbol)).toString)
             EntryPointsClasses.put(aClassDef.classSymbol.asClass, null)
             reporter.warning(null, "ENTRY P CODE : " + t.toString)
 
@@ -269,6 +277,22 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
             val cep = getOrUpdateEntryPointsImpl(c.symbol.asClass)
 
             reporter.info(null, showRaw(c) ,true)
+
+
+            val configPath = body.flatMap(b => b.filter({
+              case Literal(Constant(c : String)) => c.startsWith(Options.configPathDenoter)
+              case _ => false
+            })).map({
+              case Literal(Constant(c : String)) => c.substring(Options.configPathDenoter.length)
+            }).headOption.orNull
+
+            if(configPath != null){
+              cep.setConfig(Paths.get(configPath))  //todo support relative paths
+              val d : ContainerConfig[C] = new ContainerConfig[C](cep.containerJSONConfig.toPath)(io, plugin)
+              logger.info("test: " +d.getIsPublic.toString)
+            }
+
+
             val trees =
               body.flatMap(b => b.filter({
                 case Apply(fun, _) => fun match {
@@ -333,52 +357,5 @@ class TreeTraverser[G <: Global](val global : Global, val plugin : Containerize)
       case _ => super.traverse(tree)
     }
 
-    def dependencies() : Unit = {
-
-      EntryPointsImpls = EntryPointsImpls.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
-
-      EntryPointsImpls = EntryPointsImpls.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
-
-      EntryPointsImpls.toList.foreach(x => reporter.info(null, "ENTRYSS: " + x._1.fullNameString + " - " + x._2.containerEntryClass.fullNameString + " - " + x._2.containerPeerClass.fullNameString + " :: " + x._2.containerEndPoints.foldLeft("")((e, d) => e + "||" + d.connectionPeer + "&" + d.port + "&" + d.version + "&" + d.way).toString, true))
-
-      /**
-      EntryPoints = PeerDefs.map{
-        p => {
-          val entryPoint = EntryPointsImpls.find(k => k._2. ).orNull
-          if(entryPoint == null || entryPoint._containerPeer == NoSymbol)
-            reporter.error(null, s"no associated peer found for entry point: ${k._1.fullNameString}, object must at least override loci.container.ContainerEntryPoint.containerPeer")
-          entryPoint._containerEntryClass = k._1.asInstanceOf[entryPoint.global.Symbol]
-          (k._1 -> entryPoint)
-        }
-      }*/
-
-      /**
-      EntryPointsClasses.foreach{ e =>
-        if(!PeerClassDefs.exists(_.classSymbol.fullName == e._2._containerPeer.fullName))
-          reporter.error(null, s"Couldn't find associated peer class ${ e._2._containerPeer } for entry point ${ e._1.fullName }.")
-      }
-      PeerClassDefs.foreach{ e =>
-        if(!EntryPointsClasses.exists(_._2._containerPeer.fullName == e.classSymbol.fullName))
-          reporter.error(null, s"No entry point found for peer class ${ e.classSymbol.fullName }, every defined Peer must have at least one entry point inheriting from trait loci.container.ContainerEntryPoint.")
-      }
-      */
-
-      /**EntryPoints = EntryPointsClasses.map(k => k._2 -> PeerClassDefs.find(_.classSymbol.fullName == k._2._containerPeer.fullName).orNull)*/
-
-      /*ClassDefs.filter(_.isPeer).map(p => {
-
-        val fileDependencyList : List[TAbstractClassDef] = ClassDefs.toList
-        /*
-          ClassDefs.filter(x => x.isPeer && !x.equals(p)).foldLeft(ClassDefs)((list, x) =>
-            list.filterNot(c => c.equals(x) || c.classSymbol.javaClassName.startsWith(x.classSymbol.javaClassName))
-          ).toList
-         */
-        //.map(c => Paths.get(c.filePath.path).normalize)
-        //todo ok? we could also do outputpath + c.symbol.javaBinaryNameString.toString
-        // global.reporter.warning(null, fileList.map(_.toAbsolutePath).toString)
-
-        p.copy(classFiles = fileDependencyList)
-      })*/
-    }
   }
 }

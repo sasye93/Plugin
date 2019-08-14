@@ -1,10 +1,18 @@
-package containerize.build
+package loci.containerize.container
 
-import containerize.IO.Logger
-import containerize.types.DockerImage
-import containerize.Options
+import java.nio.file.Path
+
+import loci.containerize.IO.Logger
+import loci.containerize.types.DockerImage
+import loci.containerize.Options
 
 import scala.sys.process.Process
+
+
+/**
+  * run cmd:
+  * docker run -a -i -p 43055:43055 --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t XXXIMAGE -name XXXIMAGE
+  */
 
 class Runner(logger : Logger) {
 //todo not working, dockerd seems not enough
@@ -33,12 +41,15 @@ class Runner(logger : Logger) {
   //check if this goes to far, maybe -filter it
   def dockerCleanup() : Unit = {
     if(Options.cleanup){
-      Process(s"docker image prune -f").!(logger)
+      (Process(s"docker image prune -f") #&&
+        Process("docker volume prune -f") #&&
+        Process("docker network prune -f") #&&
+        Process("docker container prune -f")).!(logger)
     }
   }
   def dockerLogin(username : String = Options.dockerUsername, password : String = Options.dockerPassword, host : String = Options.dockerHost) : Unit = {
     if(Process(s"docker login -u $username -p $password $host").!(logger.weak) != 0){
-      logger.error(s"Login failed for ${ if(host == "") "DockerHub" else host }, please check you supplied the correct credentials via -P:containerize:username=XXX and -P:containerize:password=XXX")
+      logger.error(s"Login failed for ${ if(host == "") "DockerHub" else host }, please check you supplied the correct credentials via -P:loci.containerize:username=XXX and -P:loci.containerize:password=XXX")
     }
   }
   def dockerLogout(host : String = Options.dockerHost) : Unit = {
@@ -46,9 +57,18 @@ class Runner(logger : Logger) {
       logger.warning("Could not logout.")
     }
   }
-  def runContainer(tag : DockerImage): Unit ={
-    if(Process(s"docker run -d ${tag.tag}").!(logger) != 0){
-      logger.warning(s"Error occurred while trying to run container ${tag.tag}, container didn't start.")
+
+  object Swarm{
+    def init() : Unit = {
+      if(Process(s"docker swarm init").!(logger) != 0){
+        logger.error(s"Error when trying to initialize Docker Swarm.")
+      }
+    }
+    def deploy(appName : String, composeFile : Path) : Unit = {
+      if(Process("docker stack deploy -c \"" + composeFile.toAbsolutePath.toString + "\" " + appName).!(logger) != 0){
+        logger.error(s"Error when trying to deploy swarm stack.")
+      }
     }
   }
+
 }

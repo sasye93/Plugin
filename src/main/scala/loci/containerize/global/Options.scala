@@ -1,10 +1,11 @@
-package containerize
+package loci.containerize
 
 import java.io.File
 import java.nio.file.{Path, Paths}
 
-import containerize.IO.Logger
-import containerize.Check
+import com.sun.javafx.PlatformUtil
+import loci.containerize.IO.Logger
+import loci.containerize.Check
 
 package object Options {
   sealed trait Stage{
@@ -20,6 +21,21 @@ package object Options {
   case object image extends Stage { def id = 2 }
   case object publish extends Stage{ def id = 3 }
 
+  var containerize : Boolean = false
+
+  val configPathDenoter : String = loci.container.ConfigImpl.configPathDenoter
+  val containerHome : String = "/app"
+  val containerVolumeStore : String = s"$containerHome/data"
+
+  val dir : String = "container"
+  val dirPrefix : String = "build_"
+  val libDir : String = "libs"
+  val composeDir : String = "compose"
+  val networkDir : String = "network"
+
+  var os : String = if (PlatformUtil.isWindows) "windows" else "linux"
+  def osExt : String = if (os == "windows") "bat" else "sh"
+
   /**
     * options and their default values.
     */
@@ -29,6 +45,7 @@ package object Options {
   var nocache : Boolean = false
   var showInfos : Boolean = true
   var cleanup : Boolean = true
+  var cleanBuilds : Boolean = true //todo set faflse
 
   var dockerUsername : String = "sasye93"
   var dockerPassword : String = "Jana101997"
@@ -40,17 +57,18 @@ package object Options {
   val defaultContainerVersion = "1.0"
 
   var platform : String = "linux"
+  def plExt : String = if (platform == "windows") "bat" else "sh"
 
-  //todo not good
+  //todo not good, maybe we really ned it as compile opt
   val targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
 
   //must end with /, respectively.
   private val unixLibraryPathPrefix : String = "/var/lib/libs/"
   private val windowsLibraryPathPrefix : String = "/C:/libs/"
 
-  var libraryPathPrefix : String = if(platform == "windows") windowsLibraryPathPrefix else unixLibraryPathPrefix
+  def libraryPathPrefix : String = if(platform == "windows") windowsLibraryPathPrefix else unixLibraryPathPrefix
 
-  val libraryBaseImageTag : String = "loci-containerize-library-base"
+  val libraryBaseImageTag : String = "loci-loci.containerize-library-base"
 
   var jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
 
@@ -61,41 +79,40 @@ package object Options {
 
   def processOptions(options: List[String], error: String => Unit): Unit = {
 
-    options.foreach{ option =>
-      option match{
-        case "no-jar" => jar = false
-        case "no-info" => showInfos = false
-        case "no-cleanup" => cleanup = false
-        case "no-cache" => nocache = true
+    options.foreach {
+      case "no-jar" => jar = false
+      case "no-info" => showInfos = false
+      case "no-cleanup" => cleanup = false
+      case "no-cache" => nocache = true
+      case "build-cleanup" => cleanBuilds = true
 
-        case "platform=windows" => platform = "windows"; libraryPathPrefix = windowsLibraryPathPrefix
-        case "platform=linux" => platform = "linux"; libraryPathPrefix = unixLibraryPathPrefix
+      case "platform=windows" => platform = "windows"
+      case "platform=linux" => platform = "linux"
 
-        //todo check em, print warning for large JRE; also support basic JDK.
-        case "baseImage=jre" => jreBaseImage = "openjdk:8-jre"
-        case "baseImage=jre-latest" => jreBaseImage = "openjdk:jre"
-        case "baseImage=jre-small" => jreBaseImage = "openjdk:8-jre-small"
-        case "baseImage=jre-small-latest" => jreBaseImage = "openjdk:jre-small"
-        case "baseImage=jre-alpine" => jreBaseImage = "openjdk:8-jre-alpine"
-        case "baseImage=jre-alpine-latest" => jreBaseImage = "openjdk:jre-alpine"
-          
-        case "save-images" => saveImages = true
+      //todo check em, print warning for large JRE; also support basic JDK.
+      case "baseImage=jre" => jreBaseImage = "openjdk:8-jre"
+      case "baseImage=jre-latest" => jreBaseImage = "openjdk:jre"
+      case "baseImage=jre-small" => jreBaseImage = "openjdk:8-jre-small"
+      case "baseImage=jre-small-latest" => jreBaseImage = "openjdk:jre-small"
+      case "baseImage=jre-alpine" => jreBaseImage = "openjdk:8-jre-alpine"
+      case "baseImage=jre-alpine-latest" => jreBaseImage = "openjdk:jre-alpine"
 
-        case s if s.startsWith("repo=") => dockerRepository = s.substring("repo=".length).toLowerCase
-        case s if s.startsWith("user=") => dockerUsername = s.substring("user=".length)
-        case s if s.startsWith("password=") => dockerPassword = s.substring("password=".length)
-        case s if s.startsWith("host=") => dockerHost = s.substring("host=".length)
+      case "save-images" => saveImages = true
 
-        case s if s.startsWith("stage=") => s.substring("stage=".length) match{
-          case "file" => stage = file
-          case "image" => stage = image
-          case "publish" => stage = publish
-        }
+      case s if s.startsWith("repo=") => dockerRepository = s.substring("repo=".length).toLowerCase
+      case s if s.startsWith("user=") => dockerUsername = s.substring("user=".length)
+      case s if s.startsWith("password=") => dockerPassword = s.substring("password=".length)
+      case s if s.startsWith("host=") => dockerHost = s.substring("host=".length)
 
-        case s if s.startsWith("script=") => setupScriptPath = Paths.get(s.substring("script=".length).replace("%20", " "))
-
-        case _ => error("unknown option supplied: " + option)
+      case s if s.startsWith("stage=") => s.substring("stage=".length) match {
+        case "file" => stage = file
+        case "image" => stage = image
+        case "publish" => stage = publish
       }
+
+      case s if s.startsWith("script=") => setupScriptPath = Paths.get(s.substring("script=".length).replace("%20", " "))
+
+      case o @ _ => error("unknown option supplied: " + o)
     }
   }
   def checkConstraints(logger : Logger) : Unit = {
