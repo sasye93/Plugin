@@ -82,7 +82,8 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
       def getIpTablesCmd(d : TempLocation) : String = {
         val ports : List[String] = if(d.entryPoint.endPoints.nonEmpty) d.entryPoint.endPoints.map(_.port.toString) else List(Options.defaultContainerPort.toString)
-        ports.foldLeft(""){ (s, port) =>
+        //todo replace back to ports
+        List().foldLeft(""){ (s, port) =>
           s + (Options.platform match{
             case "windows" => s"netsh interface portproxy add v4tov4 listenport=$port listenaddress=127.0.0.1 connectport=$port connectaddress=0.0.0.0" //todo check if ok
             case _ => s"iptables -t nat -I PREROUTING -p tcp --dport $port -j DNAT --to 127.0.0.1:$port"
@@ -114,7 +115,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
             s"WORKDIR ${ Options.containerHome } \r\n" +
             s"COPY ./run.$plExt ./*.jar ./ \r\n" +
             //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
-            s"EXPOSE${ if(d.entryPoint.endPoints.nonEmpty) d.entryPoint.endPoints.foldLeft("")((s, e) => s + " " + e.port ) else Options.defaultContainerPort } \r\n" +
+            (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\r\n" +
             s"ENTRYPOINT ./run.$plExt \r\n"
 
 
@@ -156,7 +157,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       Process(s"bash BuildBaseImage.$osExt", libraryPath.toFile).!!(logger)
 
       dirs.foreach{ d =>
-        Process("bash " + "BuildContainer." + osExt + "\"", d.tempPath.toFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
+        Process("bash " + "BuildContainer." + s"$osExt" + "\"", d.tempPath.toFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
         /**
         val peerDir : File = new File(getRelativeContainerPath(d).toString)//todo check if same begin
 
@@ -184,15 +185,17 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
         val CMD =
           s"docker rm --volumes -f ${ d.getImageName }\n" + //todo -v flag ok? removes volume associated
           s"docker volume create ${ d.getImageName } \n" + //todo -a flag?
-          s"docker run -d -p 43055:43055 --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName } \n"
-        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"RunContainer.$osExt"))
+          s"docker run -id ${ d.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName } \n" +
+          "docker container inspect -f \"Container '" + d.getImageName + "' connected to " + network.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + d.getImageName + "\n"
+        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"RunContainer.$osExt"))//todo add -p, .sh
       }
     }
     def buildDockerStopScripts() : Unit = {
       dirs.foreach { d =>
         val CMD =
             s"docker network disconnect ${ network.getName } ${ d.getImageName }\n" +
-            s"docker stop ${ d.getImageName } \n"
+            s"docker stop ${ d.getImageName } \n" +
+            s"docker container rm -f ${ d.getImageName }"
         io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"StopContainer.$osExt"))
       }
     }

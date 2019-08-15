@@ -1,12 +1,12 @@
 package loci.containerize.container
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 
 import loci.containerize.IO.Logger
-import loci.containerize.types.DockerImage
 import loci.containerize.Options
+import loci.containerize.types.TempLocation
 
-import scala.sys.process.Process
+import scala.sys.process._
 
 
 /**
@@ -55,6 +55,14 @@ class Runner(logger : Logger) {
   def dockerLogout(host : String = Options.dockerHost) : Unit = {
     if(Process(s"docker logout $host").!(logger) != 0){
       logger.warning("Could not logout.")
+    }
+  }
+
+  //todo doesnt care about order
+  @deprecated("")
+  def runLandscape(dirs : List[TempLocation]) : Unit = {
+    dirs.foreach{ d => //todo this is windows only
+      Process("cmd /k start \"t\" /W /NORMAL /SEPARATE cmd /k RunContainer.$osExt", d.tempPath.toFile)//todo logger, .sh NOT WORKINMG: network not working.
     }
   }
 

@@ -160,6 +160,7 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           builder.buildDockerStartScripts()
           builder.buildDockerStopScripts()
           builder.buildDockerImages()
+          runner.runLandscape(locs)
         }
         if(Options.stage >= Options.publish){
           builder.publishDockerImagesToRepo()
