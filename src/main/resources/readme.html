@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="Simon Schoenwaelder">
+    <meta name="contact" content="simon.schoenwaelder@gmx.de">
+    <title>Loci Containerization Plugin v1.0</title>
+    <style>
+        *{
+            font-family:Helvetica,Arial,sans-serif;
+            font-size:13px;
+            color: #c5c5c5;
+        }
+        html{
+            background-color: #1b1a19;
+            height:100%;
+        }
+        body{
+            position:absolute;
+            min-height:1200px;
+        }
+        h1{
+            font-weight:100;
+            margin-top:3em;
+            margin-bottom:3em;
+            font-size:28px;
+        }
+        h1,h2,h3,h4,h5,h6,p,strong, a{
+            color: #ff8b6b
+        }
+        footer{
+            opacity:0.75;
+            position:absolute;
+            bottom:1em;
+            left:0;
+            right:0;
+            margin:auto;
+            font-size:11px;
+            text-align:center;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align:center">Containerization Plugin for ScalaLoci v1.0</h1>
+    <div>
+        <strong>Dockerfile</strong>
+        <p>The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).</p>
+    </div>
+
+"Dockerfile\t\t: \n" +
+"run.{sh|cmd}\t\t: The run script for the Container, will be called as entry point when the container is started and start the .jar.\n" +
+"BuildContainer.{sh|cmd}\t: Script that can be used to build this Container (Build a Docker Image).\n" +
+"RunContainer.{sh|cmd}\t: Script that can be used to run this Container (first, an image must be build using the Dockerfile, either automatically or manually).\n" +
+"StopContainer.{sh|cmd}\t: Script that can be used to stop this Container.\n" +
+"*.jar\t\t\t: The actual tier code, packed as JAR.\n"
+    <footer>
+        <address>
+            <p>this plugin was developed as part of a master thesis at the TU Darmstadt.</p>
+            <p>contact: <a href="mailto:simon.schoenwaelder@gmx.de">simon.schoenwaelder@gmx.de</a></p>
+        </address>
+    </footer>
+</body>
+</html>

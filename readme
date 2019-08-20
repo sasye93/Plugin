@@ -12,3 +12,5 @@ for windows contianres: experimental on
 warning when multiple peer starts in 1 entry point (one service per container)
 entry point check as attribute active
 temp dir nich in classes, kommt durcheinander,
+
+requirements: cygwin64 or anything for shell support

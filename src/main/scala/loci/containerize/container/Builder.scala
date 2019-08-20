@@ -12,6 +12,7 @@ import loci.containerize.Options
 import loci.containerize.Check
 import loci.containerize.types.TempLocation
 
+import scala.io.Source
 import scala.util.Try
 
 //todo escape vars (injection)
@@ -21,6 +22,8 @@ import scala.util.Try
 
 class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin : C){
 
+  import plugin.toolbox
+
   def getBuilder(dirs : List[TempLocation], buildDir : File) : build = new build(dirs, buildDir)
 
   class build(dirs : List[TempLocation], buildDir : File){
@@ -28,13 +31,13 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     //todo get proper error code
     //todo if existing, juzst update
 
-    val logger : Logger = plugin.logger
+    implicit val logger : Logger = plugin.logger
 
     var libraryPath : Path = _
     val plExt : String = Options.plExt
     val osExt : String = Options.osExt
 
-    private def getRelativeContainerPath(loc : TempLocation): Path = buildDir.toPath.relativize(loc.tempPath).normalize
+    private def getRelativeContainerPath(loc : TempLocation): Path = buildDir.toPath.relativize(loc.getTempPath).normalize
 
     //todo make this a constructor, its first mandat. step
     def collectLibraryDependencies(dependencies : List[Path], buildDir : Path) : Option[Path] = {
@@ -63,11 +66,11 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
           "Class-Path: " + dependencies.foldLeft("")((c, p) => c + Options.libraryPathPrefix + p.getFileName + " \r\n ") +
           "\r\n"
 
-      io.buildFile(CMD, Paths.get(directory.tempPath.toString, "MANIFEST.MF"))
+      io.buildFile(CMD, Paths.get(directory.getTempPathString, "MANIFEST.MF"))
     }
     def buildJARS(dependencies : List[Path]) : Unit = {
       dirs.foreach(d => {
-        val workDir : File = new File(d.tempPath.toUri)
+        val workDir : File = new File(d.getTempUri)
         val manifest = buildMANIFEST(dependencies, d).orNull
         if(Process("jar -cfm ./" + d.getJARName + ".jar MANIFEST.MF -C classfiles . ", workDir).!(logger) == 0){
           manifest.delete()
@@ -96,7 +99,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
             getIpTablesCmd(d) +
             "java -jar -Dfile.encoding=UTF-8 " + d.getJARName + ".jar"
 
-        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"run.$plExt"))
+        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"run.$plExt"))
       })
     }
 
@@ -112,14 +115,21 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
         val CMD = //todo hardcoded
           s"FROM ${ Options.libraryBaseImageTag } \r\n" +
+          s"LABEL ${ Options.labelPrefix }.description=" + "\"todo\" \r\n" + //todo descr macro
+          s"LABEL ${ Options.labelPrefix }.version=1.0 \r\n" +  //todo vers macro
             s"WORKDIR ${ Options.containerHome } \r\n" +
             s"COPY ./run.$plExt ./*.jar ./ \r\n" +
             //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
             (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\r\n" +
+            Check ?=> (d.entryPoint.setupScript,
+              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \r\n" +  //todo can we just run it without copy? layers!
+                s"RUN ${Options.containerHome}preRunSpecific.$plExt \r\n", "") +
             s"ENTRYPOINT ./run.$plExt \r\n"
 
+        if(Check ? d.entryPoint.setupScript)
+          Files.copy(d.entryPoint.setupScript.toPath, Paths.get(d.getTempPathString, s"preRunSpecific.$plExt"), REPLACE_EXISTING)
 
-        io.buildFile(CMD, Paths.get(d.tempPath.toString, "Dockerfile"))
+        io.buildFile(CMD, Paths.get(d.getTempPathString, "Dockerfile"))
 
         //# Copy the current directory contents into the container at /app
         //COPY . /appupickle
@@ -139,15 +149,16 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
           "ENV SCALA_VERSION=2.12.6 \r\n" +
           "WORKDIR / \r\n" +
           s"RUN mkdir -p ${ Options.containerHome } && mkdir -p ${Options.libraryPathPrefix} \r\n" +
-          s"RUN apt-get update && apt-get install iptables net-tools -y \r\n" + //todo seems to work only with update...
+          s"RUN apt-get update && apt-get install iptables net-tools iputils-ping -y \r\n" + //todo seems to work only with update...
           s"COPY . ${Options.libraryPathPrefix} \r\n" + //todo copy only libs
-          Check ?=>[String] (Options.setupScript,
+          Check ?=>[String] (Options.getSetupScript.orNull,
             s"COPY ./preRun.$plExt ${Options.libraryPathPrefix}preRun.$plExt \r\n" +  //todo can we just run it without copy? layers!
             s"RUN ${ Options.libraryPathPrefix }preRun.$plExt \r\n", "")
 
-      if(Check ? Options.setupScript)
-        Files.copy(Options.setupScript.toPath, Paths.get(libraryPath.toString, s"preRun.$plExt"), REPLACE_EXISTING)
-
+      Options.getSetupScript match{
+        case Some(f) => Files.copy(f.toPath, Paths.get(libraryPath.toString, s"preRun.$plExt"), REPLACE_EXISTING)
+        case None =>
+    }
       io.buildFile(CMD, Paths.get(libraryPath.toString, "Dockerfile"))
     }
     //todo cache etc., takes long
@@ -157,7 +168,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       Process(s"bash BuildBaseImage.$osExt", libraryPath.toFile).!!(logger)
 
       dirs.foreach{ d =>
-        Process("bash " + "BuildContainer." + s"$osExt" + "\"", d.tempPath.toFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
+        Process("bash " + "BuildContainer." + s"$osExt" + "\"", d.getTempFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
         /**
         val peerDir : File = new File(getRelativeContainerPath(d).toString)//todo check if same begin
 
@@ -173,10 +184,11 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     def buildDockerImageBuildScripts() : Unit = {
       dirs.foreach { d =>
         val peerDir : File = new File(getRelativeContainerPath(d).toString)//todo check if same begin
+        val dirDepth : String = "../" * (peerDir.getPath.count(c => c == '/' || c == '\\') + 1)
         val CMD =
-            s"cd .. \n" +
-            s"docker build -t ${ d.getImageName } -f ${ peerDir.getPath + "/Dockerfile" + " " + peerDir.getPath + "/" } \n"
-        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"BuildContainer.$osExt"))
+            s"cd $dirDepth \n" +
+            s"docker build -t ${ d.getImageName } -f ${ toolbox.toUnixString(peerDir.toPath) + "/Dockerfile" + " " + toolbox.toUnixString(peerDir.toPath) + "/" } \n"
+        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"BuildContainer.$osExt"))
       }
     }
     def buildDockerStartScripts() : Unit = {
@@ -187,7 +199,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
           s"docker volume create ${ d.getImageName } \n" + //todo -a flag?
           s"docker run -id ${ d.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName } \n" +
           "docker container inspect -f \"Container '" + d.getImageName + "' connected to " + network.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + d.getImageName + "\n"
-        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"RunContainer.$osExt"))//todo add -p, .sh
+        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"RunContainer.$osExt"))//todo add -p, .sh
       }
     }
     def buildDockerStopScripts() : Unit = {
@@ -196,7 +208,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
             s"docker network disconnect ${ network.getName } ${ d.getImageName }\n" +
             s"docker stop ${ d.getImageName } \n" +
             s"docker container rm -f ${ d.getImageName }"
-        io.buildFile(io.buildScript(CMD), Paths.get(d.tempPath.toString, s"StopContainer.$osExt"))
+        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"StopContainer.$osExt"))
       }
     }
 
@@ -213,23 +225,9 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       }
     }
 
-    def distributeReadmeFiles(buildDir : Path) : Unit = {
-      val CMD =
-        "README\n" +
-        "--------------\n" +
-        "Dockerfile\t\t: The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).\n" +
-        "run.{sh|cmd}\t\t: The run script for the Container, will be called as entry point when the container is started and start the .jar.\n" +
-        "BuildContainer.{sh|cmd}\t: Script that can be used to build this Container (Build a Docker Image).\n" +
-        "RunContainer.{sh|cmd}\t: Script that can be used to run this Container (first, an image must be build using the Dockerfile, either automatically or manually).\n" +
-        "StopContainer.{sh|cmd}\t: Script that can be used to stop this Container.\n" +
-        "*.jar\t\t\t: The actual tier code, packed as JAR.\n"
-
-      io.buildFile(CMD, Paths.get(buildDir.toAbsolutePath.toString, "readme.txt")) match{
-        case Some(readme) =>
-          dirs.foreach( d => Try{ Files.copy(readme.toPath.toAbsolutePath, Paths.get(d.tempPath.toString, readme.getName)) })
-          readme.delete()
-        case None => logger.warning("Could not create readme files.")
-      }
+    def createReadme(buildDir : Path) : Unit = {
+      if(Check ! io.buildFile(Source.fromInputStream(getClass.getResourceAsStream("/readme.html")).mkString, Paths.get(buildDir.toAbsolutePath.toString, "readme.html")).orNull)
+        logger.warning("Could not create readme file.")
     }
   }
 }

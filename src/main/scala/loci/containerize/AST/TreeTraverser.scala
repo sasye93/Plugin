@@ -274,24 +274,8 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
 
           if(!c.symbol.isSynthetic && !c.symbol.isAnonymousClass /**global.cleanup.getEntryPoints.contains(c.symbol.fullNameString)*/) {
 
+            //todo we create new even if this is not entry point
             val cep = getOrUpdateEntryPointsImpl(c.symbol.asClass)
-
-            reporter.info(null, showRaw(c) ,true)
-
-
-            val configPath = body.flatMap(b => b.filter({
-              case Literal(Constant(c : String)) => c.startsWith(Options.configPathDenoter)
-              case _ => false
-            })).map({
-              case Literal(Constant(c : String)) => c.substring(Options.configPathDenoter.length)
-            }).headOption.orNull
-
-            if(configPath != null){
-              cep.setConfig(Paths.get(configPath))  //todo support relative paths
-              val d : ContainerConfig[C] = new ContainerConfig[C](cep.containerJSONConfig.toPath)(io, plugin)
-              logger.info("test: " +d.getIsPublic.toString)
-            }
-
 
             val trees =
               body.flatMap(b => b.filter({
@@ -310,6 +294,20 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
               case s: Select =>
                 cep.containerPeerClass = s.symbol.asInstanceOf[cep.global.Symbol]
                 cep.containerEntryClass = c.symbol.asInstanceOf[cep.global.Symbol]
+
+              /** collecting annotations for entry class */
+              body.foreach(_.foreach({
+                case Literal(Constant(s : String)) =>
+                  val annot: String = s.substring(s.indexOf("_") +1)
+                  if(!annot.isEmpty)
+                    s match{
+                    case cfg if cfg.startsWith(Options.configPathDenoter) => cep.setConfig(Paths.get(annot))  //todo support relative paths
+                    case scr if scr.startsWith(Options.scriptPathDenoter) => cep.setScript(Paths.get(annot))  //todo support relative paths or something like that
+                    case _ =>
+                  }
+                case _ =>
+                })
+              )
             })
 
             val trees2 =

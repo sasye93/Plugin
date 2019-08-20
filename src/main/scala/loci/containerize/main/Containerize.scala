@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.Paths
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.nio.file.Path
 
 import loci.containerize.IO.Logger
 import loci.containerize.container.Runner
@@ -17,6 +18,7 @@ import loci.containerize.IO.IO
 import loci.containerize.types.ContainerEntryPoint
 
 import scala.collection.mutable
+import scala.collection.immutable
 
 /**
   * you can provide options using "-P:loci.containerize:<opt1>,<opt2>,..."
@@ -35,15 +37,16 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   implicit val logger : Logger = new Logger(global.reporter)
   implicit val io : IO = new IO()
 
-  val name = "loci/containerize"
-  val description = "Extends ScalaLoci to provide compiler support for direct deployment of Peers to Containers"
+  val name : String = Options.pluginName
+  val description : String = Options.pluginDescription
+
   val components : List[PluginComponent] = List[PluginComponent](
     new AnalyzeComponent[Containerize](),
     new BuildComponent[Containerize]()
   )
 
   val outputDir : File = Paths.get(global.currentSettings.outputDirs.getSingleOutput.getOrElse(Options.targetDir).toString).toFile
-  val containerDir : File = Paths.get(outputDir.getParentFile.getAbsolutePath, Options.dir).toFile
+  val homeDir : File = Paths.get(outputDir.getParentFile.getAbsolutePath, Options.dir).toFile
   val classPath : util.ClassPath = global.classPath
 
   val runner : Runner = new Runner(logger)
@@ -74,7 +77,7 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
       runner.dockerCleanup()
       runner.dockerLogin()
 
-      (containerDir.exists() && containerDir.isDirectory) || containerDir.mkdir()
+      (homeDir.exists() && homeDir.isDirectory) || homeDir.mkdir()
     }
     else false
   }
@@ -87,10 +90,11 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
     Options.processOptions(options, error)
     Options.checkConstraints(logger)
   }
-  override val optionsHelp = Some("todo")
+  override val optionsHelp = Some(Options.pluginHelp)
 
   object toolbox{
     def weakSymbolCompare(symbol1 : Symbol, symbol2 : Symbol) : Boolean = symbol1.fullName == symbol2.fullName
-    def getFormattedDateTimeString(): String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
+    def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
+    def toUnixString(p : Path): String = p.toString.replace("\\", "/")
   }
 }

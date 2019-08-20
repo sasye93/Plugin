@@ -4,6 +4,7 @@ import java.nio.file.Path
 import java.io.File
 
 import loci.containerize.Options
+import loci.containerize.Check
 import loci.containerize.main.Containerize
 
 import scala.annotation.meta.{getter, setter}
@@ -11,13 +12,12 @@ import scala.collection.mutable
 
 import scala.tools.nsc.Global
 
-@setter @getter
 //@compileTimeOnly("this class is for internal use only.")
-class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = null)(implicit val parent : C) {
+class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = null)(implicit val plugin : C) {
 
-  val global : Global = parent.global
+  val global : Global = plugin.global
 
-  import parent._
+  import plugin._
   import global._
 
   var containerEntryClass : Symbol = if(init != null) init.containerEntryClass.asInstanceOf[this.global.Symbol] else NoSymbol
@@ -25,6 +25,7 @@ class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = nu
   var containerEndPoints : mutable.MutableList[ConnectionEndPoint] = if(init != null) init.containerEndPoints.map(_.asInstanceOf[this.ConnectionEndPoint]) else mutable.MutableList()
 
   var containerJSONConfig : File = _
+  var containerSetupScript : File = _
 
   case class ConnectionEndPoint(connectionPeer : Symbol,
                                 port : Integer = Options.defaultContainerPort,
@@ -35,26 +36,41 @@ class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = nu
   def addEndPoint(connectionEndPoint: ConnectionEndPoint) : mutable.MutableList[ConnectionEndPoint] = containerEndPoints += connectionEndPoint
   def getDefaultEndpoint(connectionPeer : Symbol) : ConnectionEndPoint = ConnectionEndPoint(connectionPeer)
 
-  def getLocDenominator : String = containerEntryClass.fullNameString.replace("$", "_") + "_" + containerPeerClass.fullNameString.replace("$", "_")
+  def getLocDenominator : String = containerEntryClass.javaBinaryNameString.replace("$", "_") + "_" + containerPeerClass.fullNameString.replace("$", "_")
 
   def entryClassDefined() : Boolean = containerEntryClass != NoSymbol
   def peerClassDefined() : Boolean = containerPeerClass != NoSymbol
   def configDefined() : Boolean = containerJSONConfig != null
+  def setupScriptDefined() : Boolean = containerSetupScript != null
 
   def setConfig(path : Path) : Unit = {
-    val f : File = path.toFile
-    if(f.exists() && f.isFile)
+    logger.info(path.toString)
+    val f : File = Options.resolvePath(path)(logger).orNull
+    if(Check ? f && f.exists() && f.isFile)
       this.containerJSONConfig = f
     else
-      parent.logger.error(s"Cannot find XML config file for entry point: ${path.toString}")
-
+      logger.error(s"Cannot find annotated JSON config file for entry point: ${path.toString}")
+  }
+  def setScript(path : Path) : Unit = {
+    logger.info(path.toString)
+    val f : File = Options.resolvePath(path)(logger).orNull
+    if(Check ? f && f.exists() && f.isFile)
+      this.containerSetupScript = f
+    else
+      logger.error(s"Cannot find annotated script file for entry point: ${path.toString}")
   }
 
   def asSimplifiedEntryPoints() : SimplifiedContainerEntryPoint = {
-    SimplifiedContainerEntryPoint(this.containerEntryClass.fullName('.'), this.containerPeerClass.fullName('.'), containerEndPoints.map{
-      c => SimplifiedConnectionEndPoint(c.connectionPeer.fullName('.'), c.port, c.host, c.way, c.version)
-    }.toList)
+    SimplifiedContainerEntryPoint(
+      this.containerEntryClass.fullName('.'),
+      this.containerPeerClass.fullName('.'),
+      this.containerJSONConfig,
+      this.containerSetupScript,
+      containerEndPoints.map{
+        c => SimplifiedConnectionEndPoint(c.connectionPeer.fullName('.'), c.port, c.host, c.way, c.version)
+      }.toList
+    )
   }
 }
-case class SimplifiedContainerEntryPoint(entryClassSymbolString : String, peerClassSymbolString : String, endPoints : List[SimplifiedConnectionEndPoint])
+case class SimplifiedContainerEntryPoint(entryClassSymbolString : String, peerClassSymbolString : String, config : File, setupScript : File, endPoints : List[SimplifiedConnectionEndPoint])
 case class SimplifiedConnectionEndPoint(connectionPeerSymbolString : String, port : Integer, host : String, way : String, version : String)

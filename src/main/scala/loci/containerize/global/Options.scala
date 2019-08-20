@@ -17,6 +17,11 @@ package object Options {
     def <=(s : Stage): Boolean = this < s || this == s
   }
 
+  val pluginName = "loci/containerize"
+  val pluginDescription = "Extends ScalaLoci to provide compiler support for direct deployment of Peers to Containers"
+  val pluginHelp = "todo" //todo options descr
+  val labelPrefix = "com.loci.containerize"
+
   case object file extends Stage{ def id = 1 }
   case object image extends Stage { def id = 2 }
   case object publish extends Stage{ def id = 3 }
@@ -24,11 +29,14 @@ package object Options {
   var containerize : Boolean = false
 
   val configPathDenoter : String = loci.container.ConfigImpl.configPathDenoter
+  val scriptPathDenoter : String = loci.container.ScriptImpl.scriptPathDenoter
+
   val containerHome : String = "/app"
   val containerVolumeStore : String = s"$containerHome/data"
 
-  val dir : String = "container"
+  val dir : String = "containerize"
   val dirPrefix : String = "build_"
+  val containerDir : String ="container"
   val libDir : String = "libs"
   val composeDir : String = "compose"
   val networkDir : String = "network"
@@ -39,6 +47,8 @@ package object Options {
   /**
     * options and their default values.
     */
+  var swarmName : String = "LociContainerizedSwarm"
+
   var jar : Boolean = true
   var stage : Stage = publish
 
@@ -74,8 +84,43 @@ package object Options {
 
   var saveImages : Boolean = false
 
-  var setupScript : File = _
+  /**
+    * global script & configs for every service.
+    */
+  private var setupHomePath : Path = _
+  def getSetupScript(implicit logger : Logger) : Option[File] = resolvePath(setupScriptPath)
   private var setupScriptPath : Path = _
+  def getSetupConfig(implicit logger : Logger) : Option[File] = resolvePath(setupConfigPath)
+  private var setupConfigPath : Path = _
+
+  def resolvePath(p : Path)(implicit logger : Logger) : Option[File] = p match{
+    case null => None
+    case p if (!p.isAbsolute && Check ? setupHomePath) => Some(Paths.get(setupHomePath.toString, p.toString).toFile)
+    case p if (!p.isAbsolute) => logger.error(s"You can only supply a relative path to a file if you first set your home directory with 'home=XXX', otherwise you must supply an absolute path: ${p.toString}."); None
+    case _ => Some(p.toFile)
+  }
+
+  object defaultConfig{
+    val public : Boolean = true
+    val replicas : Double = 1
+    val cpu_limit : Double = 0.2
+    val cpu_reserve : Double = 0.1
+    val memory_limit : String = "256M"
+    val memory_reserve : String = "64M"
+    val deploy_mode : String = "replicated"
+    val JSON : String = {
+        "{" +
+        "\"public\":\"" + public + "\"," +
+        "\"deploy_mode\":\"" + deploy_mode + "\"," +
+        "\"replicas\":\"" + replicas + "\"," +
+        "\"cpu_limit\":\"" + cpu_limit + "\"," +
+        "\"cpu_reserve\":\"" + cpu_reserve + "\"," +
+        "\"memory_limit\":\"" + memory_limit + "\"," +
+        "\"memory_reserve\":\"" + memory_reserve + "\"" +
+        "}"
+    }
+  }
+
 
   def processOptions(options: List[String], error: String => Unit): Unit = {
 
@@ -99,6 +144,8 @@ package object Options {
 
       case "save-images" => saveImages = true
 
+      case s if s.startsWith("name=") => swarmName = s.substring("name=".length).toLowerCase
+
       case s if s.startsWith("repo=") => dockerRepository = s.substring("repo=".length).toLowerCase
       case s if s.startsWith("user=") => dockerUsername = s.substring("user=".length)
       case s if s.startsWith("password=") => dockerPassword = s.substring("password=".length)
@@ -110,7 +157,9 @@ package object Options {
         case "publish" => stage = publish
       }
 
-      case s if s.startsWith("script=") => setupScriptPath = Paths.get(s.substring("script=".length).replace("%20", " "))
+      case s if s.startsWith("home=") => setupHomePath = Paths.get(s.substring("home=".length).replace("%20", " ")) //todo how to pass this again? not working
+      case s if s.startsWith("script=") => setupScriptPath = Paths.get(s.substring("script=".length).replace("%20", " ")) //todo how to pass this again? not working
+      case s if s.startsWith("config=") => setupConfigPath = Paths.get(s.substring("config=".length).replace("%20", " ")) //todo how to pass this again? not working
 
       case o @ _ => error("unknown option supplied: " + o)
     }
@@ -131,10 +180,14 @@ package object Options {
         logger.error("You must specify the repository name to publish the images to via 'repo=XXX'. If you don't have a repository yet, you can create one at DockerHub.")
     }
     if(Check ? setupScriptPath){
-      setupScript = setupScriptPath.toFile
-      logger.info(setupScript.toPath.toString)
-      if(!(setupScript.exists() && setupScript.isFile))
-        logger.error("You supplied a setup script via the script option, but there is no file at that path. Remember to masquerade blanks in the path with '%20'.")
+      val f : File = getSetupScript(logger).orNull
+      if(Check ! f || !(f.exists() && f.isFile))
+        logger.error("You supplied a service-wide setup script via the script option, but there is no file at that path. Remember to masquerade blanks in the path with '%20'.")
+    }
+    if(Check ? setupConfigPath){
+      val f : File = getSetupConfig(logger).orNull
+      if(Check ! f || !(f.exists() && f.isFile))
+        logger.error("You supplied a service-wide default config via the config option, but there is no file at that path. Remember to masquerade blanks in the path with '%20'.")
     }
   }
 }

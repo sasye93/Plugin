@@ -14,13 +14,12 @@ import scala.io.{BufferedSource, Source}
 //todo try catch
 class IO(implicit val logger : Logger) {
 
-  def readFromFile(path : Path) : String = {
+  def readFromFile(path : Path) : String = readFromFile(new File(path.toUri))
+  def readFromFile(file : File) : String = {
     var bs : BufferedSource = null
     try{
-      val file : File = new File(path.toUri)
-
       if(!(file.exists && file.isFile))
-        throw new IOException(s"Cannot open file ${path.toString}.")
+        throw new IOException(s"Cannot open file ${file.getPath}.")
 
       bs = Source.fromFile(file)
       return bs.getLines.foldLeft("")((s, l) => s + l)
@@ -81,7 +80,23 @@ class IO(implicit val logger : Logger) {
     }
     None
   }
-
+  def createDirRecursively(createPath : Path) : Option[File] = {
+    try{
+      val f : File = new File(createPath.toUri)
+      if(f.isDirectory)
+        return Some(f)
+      else
+        return Some(Files.createDirectories(createPath).toFile)
+    }
+    catch{
+      case e @ (_ : FileAlreadyExistsException |
+                _ : UnsupportedOperationException |
+                _ : SecurityException |
+                _ : IOException) => logger.error(e.getMessage)
+      case e : Throwable => logger.error(e.getMessage)
+    }
+    None
+  }
   def recursiveClearDirectory(dir : File, self : Boolean = false) : Unit = {
     import scala.reflect.io.Directory
     try{
@@ -104,7 +119,7 @@ class IO(implicit val logger : Logger) {
   def clearTempDirs(dirs : List[TempLocation]) : Unit = dirs match{
     case head :: tail =>
 
-      val files = new File(head.tempPath.toUri).listFiles()
+      val files = new File(head.getTempUri).listFiles()
       files.filterNot(_.getName == (head.classSymbol + ".jar")).foreach(_.delete())
 
       this.clearTempDirs(tail)
@@ -130,22 +145,6 @@ class IO(implicit val logger : Logger) {
               Files.copy(Paths.get(d.getAbsolutePath, f.getName), Paths.get(t.getAbsolutePath, f.getName), REPLACE_EXISTING)
           })
       }
-    }
-    catch{
-      case e @ (_ : FileAlreadyExistsException |
-                _ : UnsupportedOperationException |
-                _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
-      case e : Throwable => logger.error(e.getMessage)
-    }
-    finally{
-    }
-  }
-  @deprecated("does this work???", "")
-  def createFolderStructure(createPath : Path) : Unit = {
-    try{
-      if(!new File(createPath.toUri).isDirectory)
-        Files.createDirectories(createPath)
     }
     catch{
       case e @ (_ : FileAlreadyExistsException |

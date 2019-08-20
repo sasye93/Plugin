@@ -11,7 +11,7 @@ class cconfig(path : String) extends StaticAnnotation {
 
 object ConfigImpl {
 
-  val configPathDenoter : String = "containerizeXMLConfigPathLocation_"
+  val configPathDenoter : String = "containerizeServiceConfigPathLocation_"
 
   def impl(c : whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 
@@ -22,10 +22,10 @@ object ConfigImpl {
       case ModuleDef(mods, name, impl) :: Nil =>
 
           val t = (c.prefix.tree match {
-            case q"new cconfig(path=$s)" if s.toString().startsWith("\"") && s.toString().endsWith("\"") => s
-            case q"new cconfig($s)" if s.toString().startsWith("\"") && s.toString().endsWith("\"") => s
-            case _ => c.abort(c.enclosingPosition, "Invalid @cconfig annotation style. Use '@cconfig(PATH), e.g. @cconfig(\"configs/mycfg.xml\").")
-          }).toString.replace("\"", "")
+            case q"new cconfig(path=$s)" if s.toString.matches("^\".*\"$") => s
+            case q"new cconfig($s)" if s.toString.matches("^\".*\"$") => s
+            case _ => c.abort(c.enclosingPosition, "Invalid @cconfig annotation style. Use '@cconfig(PATH), e.g. @cconfig(\"/configs/mycfg.json\").")
+          }).toString.replaceAll("\"", "")
 
           c.Expr[Any](ModuleDef(mods, name, Template(impl.parents, impl.self, q"private lazy val $configPathDenoter : String = ${configPathDenoter + t}" :: impl.body)))
       case _ => c.abort(c.enclosingPosition, "Invalid annotation: @cconfig must prepend module object.")

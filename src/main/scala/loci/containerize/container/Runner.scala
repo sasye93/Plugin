@@ -62,7 +62,7 @@ class Runner(logger : Logger) {
   @deprecated("")
   def runLandscape(dirs : List[TempLocation]) : Unit = {
     dirs.foreach{ d => //todo this is windows only
-      Process("cmd /k start \"t\" /W /NORMAL /SEPARATE cmd /k RunContainer.$osExt", d.tempPath.toFile)//todo logger, .sh NOT WORKINMG: network not working.
+      Process("cmd /k start \"t\" /W /NORMAL /SEPARATE cmd /k RunContainer.$osExt", d.getTempFile)//todo logger, .sh NOT WORKINMG: network not working.
     }
   }
 

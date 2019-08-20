@@ -86,22 +86,26 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
 
         //reporter.warning(null, global.genBCode.postProcessorFrontendAccess.getEntryPoints.toString)
 
-        logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.containerDir.listFiles().foldLeft("")((b,s) => b + s.getName))
+        logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.homeDir.listFiles().foldLeft("")((b, s) => b + s.getName))
         if(Options.cleanBuilds){
-          logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.containerDir.listFiles().toString)
+          logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.homeDir.listFiles().toString)
           //io.recursiveClearDirectory(plugin.containerDir)
+          io.recursiveClearDirectory(plugin.homeDir)
         }
-        io.recursiveClearDirectory(plugin.containerDir)
 
         var locs : List[TempLocation] = List[TempLocation]()
-        val buildPath = Files.createDirectory(Paths.get(plugin.containerDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString()))
+        val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
 
         try{
           def copy(entryPoint : TEntryPointDef) : Unit = {
             import java.nio.file.StandardCopyOption._
-            val buildSubPath = Files.createDirectory(Paths.get(buildPath.toAbsolutePath.toString, entryPoint.getLocDenominator))
-
-            io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(buildSubPath.toAbsolutePath.toString, "classfiles"))
+            val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, entryPoint.getLocDenominator)
+            io.createDirRecursively(s) match{
+              case Some(d) =>
+                io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(d.getAbsolutePath, "classfiles"))
+                locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, d.toPath, entryPoint.asSimplifiedEntryPoints())
+              case None => logger.error(s"Could not create directory: ${ s.toString }")
+            }
             /**
             ClassDefs.foreach(f => {
                 //reporter.warning(null, f.filePath.toString)
@@ -127,7 +131,6 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
               */
             //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
 
-            locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, buildSubPath, entryPoint.asSimplifiedEntryPoints())
             //tempSubPath.toFile.deleteOnExit()
           }
 
@@ -150,7 +153,7 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
         builder.buildJARS(depends)
         builder.buildCMDExec()
         builder.buildDockerFiles()
-        builder.distributeReadmeFiles(buildPath)
+        builder.createReadme(buildPath)
         network.buildSetupScript()
         network.buildNetwork()
 
@@ -160,17 +163,20 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           builder.buildDockerStartScripts()
           builder.buildDockerStopScripts()
           builder.buildDockerImages()
-          runner.runLandscape(locs)
+          //runner.runLandscape(locs)
         }
         if(Options.stage >= Options.publish){
           builder.publishDockerImagesToRepo()
           composer.buildDockerCompose()
+          composer.buildDockerSwarm()
+          composer.runDockerSwarm()
           //runner.Swarm.init()
           //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
         }
         //if(Options.stage.id > 2)
           //runner.runContainer(null)
 
+        logger.info(s"Containerization plugin finished, deployment path: ${ plugin.homeDir.toString }")
       }
     }
   }
