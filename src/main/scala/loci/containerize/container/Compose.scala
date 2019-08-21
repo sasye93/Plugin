@@ -66,7 +66,7 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
               "      timeout: 15s\n" +
               "      retries: 3\n" +
               "      start_period: 1m\n" +
-             **/
+             ***/
               "    labels:\n" +
              s"      ${ Options.labelPrefix }.service: " + "\"service\"\n" +
               (if(d.entryPoint.endPoints.exists(_.way != "connect"))
