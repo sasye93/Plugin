@@ -17,16 +17,26 @@
         }
         body{
             position:absolute;
+            padding:3em;
             min-height:1200px;
         }
-        h1{
-            font-weight:100;
-            margin-top:3em;
-            margin-bottom:3em;
-            font-size:28px;
+        h1,h2,h3,h4,h5,h6{
+            font-weight:100 !important;
+            margin-top:2em;
+            margin-bottom:1em;
+            color: #44e8b3;
         }
-        h1,h2,h3,h4,h5,h6,p,strong, a{
-            color: #ff8b6b
+        h1{
+            margin-top:2em;
+            margin-bottom:3em;
+            font-size:32px;
+        }
+        h2{
+            position: relative;
+            font-size:24px;
+        }
+        strong{
+            color: #ffbd75
         }
         footer{
             opacity:0.75;
@@ -38,14 +48,56 @@
             font-size:11px;
             text-align:center;
         }
+        .list li{
+            margin-top:1em;
+            margin-bottom:1em;
+        }
+        .list > li{
+            color: #91ceff;
+            list-style: square;
+        }
+        .list > li strong{
+            color: #91ceff;
+        }
+        .list > li li{
+            color:#ffbd75;
+            list-style: disc;
+        }
+        .list > li li strong{
+            color:#ffbd75;
+        }
     </style>
 </head>
 <body>
     <h1 style="text-align:center">Containerization Plugin for ScalaLoci v1.0</h1>
     <div>
-        <strong>Dockerfile</strong>
-        <p>The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).</p>
+        <h2>Prerequisities</h2>
+        <ul class="list">
+            <li><strong>Scala 2.12.6+</strong></li>
+            <li><strong>A ScalaLoci project with sbt</strong></li>
+            <li><strong>A running installation of the Docker Deamon (Docker for Windows)</strong></li>
+            <li><strong>Shell bash support on Windows (e.g. cygwin64)</strong></li>
+        </ul>
+        <h2>Folder structure</h2>
+        <ul class="list">
+            <li>
+                <strong>container /</strong>
+                <p>The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).</p>
+                <ul>
+                    <li>
+                        <strong>Dockerfile</strong>
+                        <p>The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).</p>
+                    </li>
+                    <li>
+                        <strong>run.sh</strong>
+                        <p>The created Dockerfile which is used to create Docker Images for this Peer (either automatically by the plugin or manually).</p>
+                    </li>
+                </ul>
+            </li>
+
+        </ul>
     </div>
+
 
 "Dockerfile\t\t: \n" +
 "run.{sh|cmd}\t\t: The run script for the Container, will be called as entry point when the container is started and start the .jar.\n" +

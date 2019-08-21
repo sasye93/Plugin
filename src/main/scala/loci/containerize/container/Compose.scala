@@ -77,6 +77,19 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
               "        aliases:\n" +
              s"          - ${ d.getImageName }\n"
           } +
+          "  monitor_service: \n" +
+          "    # configuration for monitoring service, running on each master node. \n" +
+          "    image: alexellis2/visualizer-arm:latest \n" +
+          "    deploy:\n" +
+          "      mode: global\n" +
+          "      placement:\n" +
+          "        constraints: [node.role == manager]\n" +
+          "    ports:\n" +
+          "      - \"8080:8080\"\n" +
+          "    volumes:\n" +
+          "      - type: bind\n" +
+          "        source: /var/run/docker.sock\n" +
+          "        target: /var/run/docker.sock\n" +
           "networks:\n" +
           "  mynet:\n" +
           "    driver: overlay\n" +
@@ -99,21 +112,26 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
 
     def buildDockerSwarm() : Unit = {
       val CMD = {
-        "docker swarm init\n" +
+        "docker node ls > /dev/null 2>&1 | grep \"Leader\" \n" +
         "if [ $? -ne 0 ]; then\n" +
-        //"   echo \"$?\"\n" +
-        "   exit 1\n" +
-        "else\n" +
-        s"   docker stack deploy -c docker-compose.yml ${ Options.swarmName /*todo */ }\n" +
-        "   if [ $? -eq 0 ]; then\n" +
+        "   docker swarm init\n" +
+        "fi \n" +
+          s"   docker stack deploy -c docker-compose.yml ${ Options.swarmName /*todo */ }\n" +
+          "   if [ $? -eq 0 ]; then\n" +
+         s"     docker service inspect ${ Options.swarmName /*todo */ }_monitor_service > /dev/null 2>&1 \n" +
+          "     if [ $? -eq 0 ]; then \n" +
+          "     echo \"----------------------------------------------------------------------------------\"\n" +
+          "     echo \">>> Swarm Visualizer running on each master node, reachable at: localhost:8080 <<<\"\n" +
+          "     echo \"----------------------------------------------------------------------------------\"\n" +
+          "     fi \n" +
           "     echo \"-----------------------\"\n" +
-          "     echo \"--- Nodes in Swarm: ---\"\n" +
+          "     echo \">>> Nodes in Swarm: <<<\"\n" +
           "     echo \"-----------------------\"\n" +
           "     docker node ls\n" +
           "     docker swarm join-token manager\n" +
           "     docker swarm join-token worker\n" +
           "     echo \"--------------------------\"\n" +
-          "     echo \"--- Services in Swarm: ---\"\n" +
+          "     echo \">>> Services in Swarm: <<<\"\n" +
           "     echo \"--------------------------\"\n" +
           "     docker service ls\n" +
           "     echo \"--------------------------\"\n" +
@@ -122,8 +140,7 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
           "     exit 0 \n" +
           "   else\n" +
           "     exit 1\n" +
-          " fi\n" +
-        "fi\n"
+          " fi\n"
       }
 
       io.buildFile(CMD, Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))

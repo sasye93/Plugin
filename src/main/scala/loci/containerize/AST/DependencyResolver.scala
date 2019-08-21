@@ -37,6 +37,7 @@ class DependencyResolver[+C <: Containerize](implicit val plugin : C) {
   def classPathDependencies() : List[Path] = {
     plugin.classPath.asClassPathString.split(";").toList.map(Paths.get(_)).filterNot(_.startsWith(System.getProperties.get("java.home").toString))
   }
+  def classJRELibs() : List[String] = List("\"$JAVA_HOME/lib\"", "\"$JAVA_HOME/lib/ext\"")
 
   def dependencies() : Unit = {
 

@@ -28,8 +28,6 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
 
   val component: PluginComponent = this
 
-  private val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
-
   override val runsAfter : List[String] = List[String]("jvm")
   override val runsRightAfter: Option[String] = Some("jvm")
   override val phaseName : String = plugin.name + "-build"
@@ -96,18 +94,17 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
         var locs : List[TempLocation] = List[TempLocation]()
         val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
 
-        try{
-          def copy(entryPoint : TEntryPointDef) : Unit = {
-            import java.nio.file.StandardCopyOption._
-            val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, entryPoint.getLocDenominator)
-            io.createDirRecursively(s) match{
-              case Some(d) =>
-                io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(d.getAbsolutePath, "classfiles"))
-                locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, d.toPath, entryPoint.asSimplifiedEntryPoints())
-              case None => logger.error(s"Could not create directory: ${ s.toString }")
-            }
-            /**
-            ClassDefs.foreach(f => {
+        def copy(entryPoint : TEntryPointDef) : Unit = {
+          import java.nio.file.StandardCopyOption._
+          val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, entryPoint.getLocDenominator)
+          io.createDirRecursively(s) match{
+            case Some(d) =>
+              io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(d.getAbsolutePath, "classfiles"))
+              locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, d.toPath, entryPoint.asSimplifiedEntryPoints())
+            case None => logger.error(s"Could not create directory: ${ s.toString }")
+          }
+          /**
+          ClassDefs.foreach(f => {
                 //reporter.warning(null, f.filePath.toString)
                 //reporter.warning(null, Paths.get(tempSubPath.toString, f.getName).toString)
 
@@ -126,31 +123,23 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
                 val parentFiles = Paths.get(f.filePath.file.getParent, canonicalName)
                 if(Files.exists(parentFiles))
                   Files.copy(parentFiles, Paths.get(tempSubPath.toString, packageSubPath, canonicalName), REPLACE_EXISTING)
-              */
+           */
               })
-              */
-            //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
+           */
+          //Files.createFile(Paths.get(tempSubPath.toString, "MANIFEST.MF"))
 
-            //tempSubPath.toFile.deleteOnExit()
-          }
+          //tempSubPath.toFile.deleteOnExit()
+        }
 
-          EntryPointsImpls.foreach(e => copy(e._2))
-        }
-        catch{
-          case e: IOException => reporter.error(null, "error creating temporary directory: " + e.printStackTrace)
-          case e: SecurityException => reporter.error(null, "security exception when trying to create temporary directory: " + e.printStackTrace)
-          case e: Throwable => reporter.error(null, "unknown error when creating temporary directory: " + e.printStackTrace)
-        }
+        EntryPointsImpls.foreach(e => copy(e._2))
 
         val network = new Network(plugin.io)(buildPath)
         val builder = new Builder(plugin.io)(network).getBuilder(locs, buildPath.toFile)
         val composer = new Compose(plugin.io).getComposer(locs, buildPath.toFile)
 
-        val depends : List[Path] = dependencyResolver.classPathDependencies()
-
         //plugin.classPath.asClassPathString
-        builder.collectLibraryDependencies(depends, buildPath)
-        builder.buildJARS(depends)
+        builder.collectLibraryDependencies(buildPath)
+        builder.buildJARS()
         builder.buildCMDExec()
         builder.buildDockerFiles()
         builder.createReadme(buildPath)

@@ -4,6 +4,7 @@ import java.io.File
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path, Paths}
 
+import loci.containerize.AST.DependencyResolver
 import loci.containerize.IO._
 import loci.containerize.main.Containerize
 
@@ -33,6 +34,8 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
     implicit val logger : Logger = plugin.logger
 
+    private val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
+
     var libraryPath : Path = _
     val plExt : String = Options.plExt
     val osExt : String = Options.osExt
@@ -40,8 +43,9 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     private def getRelativeContainerPath(loc : TempLocation): Path = buildDir.toPath.relativize(loc.getTempPath).normalize
 
     //todo make this a constructor, its first mandat. step
-    def collectLibraryDependencies(dependencies : List[Path], buildDir : Path) : Option[Path] = {
+    def collectLibraryDependencies(buildDir : Path) : Option[Path] = {
       val tempLibDir = io.createDir(Paths.get(buildDir.toAbsolutePath.toString, Options.libDir)).orNull
+      val dependencies : List[Path] = dependencyResolver.classPathDependencies()
 
       if(Check ? tempLibDir){
         libraryPath = tempLibDir.toPath
@@ -58,20 +62,21 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       }
       else None
     }
-    def buildMANIFEST(dependencies : List[Path], directory : TempLocation) : Option[File] ={
+    def buildMANIFEST(directory : TempLocation) : Option[File] ={
 
+      val dependencies : List[String] = dependencyResolver.classPathDependencies().map(Options.libraryPathPrefix + _.getFileName) ++ dependencyResolver.classJRELibs()
       val CMD =
         "Manifest-Version: 1.0 \r\n" +
           "Main-Class: " + directory.entryPoint.entryClassSymbolString + " \r\n" +
-          "Class-Path: " + dependencies.foldLeft("")((c, p) => c + Options.libraryPathPrefix + p.getFileName + " \r\n ") +
+          dependencies.foldLeft("Class-Path: ")((c, p) => c + p + " \r\n ") +
           "\r\n"
 
       io.buildFile(CMD, Paths.get(directory.getTempPathString, "MANIFEST.MF"))
     }
-    def buildJARS(dependencies : List[Path]) : Unit = {
+    def buildJARS() : Unit = {
       dirs.foreach(d => {
         val workDir : File = new File(d.getTempUri)
-        val manifest = buildMANIFEST(dependencies, d).orNull
+        val manifest = buildMANIFEST(d).orNull
         if(Process("jar -cfm ./" + d.getJARName + ".jar MANIFEST.MF -C classfiles . ", workDir).!(logger) == 0){
           manifest.delete()
           Try {
@@ -146,7 +151,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     def buildDockerBaseFile() : Unit = {
       val CMD =
         s"FROM ${Options.jreBaseImage} \r\n" +
-          "ENV SCALA_VERSION=2.12.6 \r\n" +
+          s"ENV SCALA_VERSION=${ util.Properties.versionNumberString } \r\n" +  //todo vers ok?
           "WORKDIR / \r\n" +
           s"RUN mkdir -p ${ Options.containerHome } && mkdir -p ${Options.libraryPathPrefix} \r\n" +
           s"RUN apt-get update && apt-get install iptables net-tools iputils-ping -y \r\n" + //todo seems to work only with update...
@@ -215,7 +220,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     def publishDockerImagesToRepo() : Unit = {
       dirs.foreach{ d =>
         val imageTag = s"${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }"
-        Process(s"docker tag ${ d.getImageName } $imageTag").#&&(Process(s"docker push $imageTag")).!(logger)
+        (Process(s"docker tag ${ d.getImageName } $imageTag") #&& Process(s"docker push $imageTag")).!(logger)
       }
     }
     def saveImageBackups(tags : List[String]): Unit = {
@@ -226,8 +231,13 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     }
 
     def createReadme(buildDir : Path) : Unit = {
-      if(Check ! io.buildFile(Source.fromInputStream(getClass.getResourceAsStream("/readme.html")).mkString, Paths.get(buildDir.toAbsolutePath.toString, "readme.html")).orNull)
-        logger.warning("Could not create readme file.")
+      /** todo
+      io.buildFile(Source.fromResource("/readme.html", this.getClass.getClassLoader).mkString, Paths.get(buildDir.toAbsolutePath.toString, "readme.html")) match{
+        case Some(readme) =>
+          dirs.foreach( d => Try{ Files.copy(readme.toPath.toAbsolutePath, Paths.get(d.getTempPathString, readme.getName)) })
+          readme.delete()
+        case None => logger.warning("Could not create readme file.")
+      }*/
     }
   }
 }
