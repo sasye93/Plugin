@@ -1,16 +1,1 @@
 
-requirements:
-- package structure must fit to folder structure, e.g. package.sub.class1 must be inside package/sub/
-- entry points must have same name as peer an be inside same package, but not nested in class, e.g. entry point of package.sub.parentClass$PeerClass must be package.sub.PeerClass
-- build.sbt: add retrieveManaged := true; path must be standard lib_managed
-- requires at least scala 2.10 (reflection API), no!: 2.12.6!!
-
-
-for windows contianres: experimental on
-
-
-warning when multiple peer starts in 1 entry point (one service per container)
-entry point check as attribute active
-temp dir nich in classes, kommt durcheinander,
-
-requirements: cygwin64 or anything for shell support
