@@ -30,6 +30,7 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
     // - ip, aliases for versions or something?
     // - ports long syntax
     // - secrets (...?)
+    // - --endpoint-mode for custom load balance-...?!?!?
     // - VOLUMES!
     def buildDockerCompose() : Unit = {
       val CMD =
@@ -135,13 +136,14 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
            |echo "---------------------------------------------"
            |""" +
             multiTierModules.foldLeft("")((M, m) => M + {
-              s"docker stack deploy -c $m.yml $m \n" +
-                "if [ $? -eq 0 ]; then\n" +
-                "  echo \"Successfully deployed stack '" + m + ".'\"\n" +
-                "  else\n" +
-                "    echo \"Error while deploying stack '" + m + "', aborting now. Please fix before retrying.\"\n" +
-                "    exit 1\n" + 
-                "fi\n"
+              s"""docker stack deploy -c $m.yml $m
+                |if [ $$? -eq 0 ]; then
+                |  echo "Successfully deployed stack '$m'."
+                |  else
+                |    echo "Error while deploying stack '$m', aborting now. Please fix before retrying."
+                |    exit 1
+                |fi
+                |""".stripMargin
             }) +   //${Options.swarmName}
         s"""docker service create --publish 8080:8080 --mode global --constraint 'node.role == manager' --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock --name monitor_service alexellis2/visualizer-arm:latest
            |  docker service inspect ${Options.swarmName}_monitor_service > /dev/null 2>&1
@@ -156,9 +158,22 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
            |docker node ls
            |docker swarm join-token manager
            |docker swarm join-token worker
-           |echo "--------------------------"
-           |echo ">>> Services in Swarm: <<<"
-           |echo "--------------------------"
+           |echo "------------------------"
+           |echo ">>> Stacks in Swarm: <<<"
+           |echo "------------------------"
+           |docker stack ls
+           |echo "------------------------"
+           |""" +
+          multiTierModules.foldLeft("")((M, m) => M + {
+            s"""|echo "-----------------"
+                |echo "Services in stack '$m':"
+                |docker stack services $m
+                |""".stripMargin
+          }) +
+          """|
+           |echo "----------------------------------"
+           |echo ">>> All services in the Swarm: <<<"
+           |echo "----------------------------------"
            |docker service ls
            |echo "--------------------------"
            |echo ">> PRESS ANY KEY TO CONTINUE / CLOSE <<"
@@ -169,6 +184,17 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
            |"""
 
       io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
+    }
+
+    def buildDockerSwarmStop(multiTierModules : List[String]) : Unit = {
+      val CMD =
+        multiTierModules.foldLeft("")((M, m) => M + {
+          s"docker stack rm $m\n"
+          //s"docker network rm $m\n"
+        }) +
+        s"docker network rm ${Options.swarmName}"
+
+      io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-stop.sh"))
     }
 
     def runDockerSwarm() : Unit = {

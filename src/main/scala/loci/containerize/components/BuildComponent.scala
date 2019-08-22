@@ -163,6 +163,7 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
             val compose = composer.getComposer(l._1.nameString, l._2)
             compose.buildDockerCompose()
             compose.buildDockerSwarm(locs.toList.map(_._1.nameString))
+            compose.buildDockerSwarmStop(locs.toList.map(_._1.nameString))
           }
           //compose.runDockerSwarm()
           //runner.Swarm.init()
