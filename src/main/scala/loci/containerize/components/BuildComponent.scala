@@ -91,16 +91,16 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           io.recursiveClearDirectory(plugin.homeDir)
         }
 
-        var locs : List[TempLocation] = List[TempLocation]()
+        val locs : collection.mutable.Map[Symbol, List[TempLocation]] = collection.mutable.HashMap[Symbol, List[TempLocation]]()
         val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
 
-        def copy(entryPoint : TEntryPointDef) : Unit = {
+        def copy(multiTierModule : Symbol, entryPoint : TEntryPointDef) : Unit = {
           import java.nio.file.StandardCopyOption._
-          val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, entryPoint.getLocDenominator)
+          val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, plugin.toolbox.getNormalizedFullNameDenominator(multiTierModule.asInstanceOf[plugin.global.Symbol]), entryPoint.getLocDenominator)
           io.createDirRecursively(s) match{
             case Some(d) =>
               io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(d.getAbsolutePath, "classfiles"))
-              locs = locs :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, d.toPath, entryPoint.asSimplifiedEntryPoints())
+              locs update (multiTierModule, locs.getOrElse(multiTierModule, List[TempLocation]()) :+ TempLocation(entryPoint.containerEntryClass.asInstanceOf[plugin.global.Symbol].fullName, d.toPath, entryPoint.asSimplifiedEntryPoints()))
             case None => logger.error(s"Could not create directory: ${ s.toString }")
           }
           /**
@@ -131,11 +131,11 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           //tempSubPath.toFile.deleteOnExit()
         }
 
-        EntryPointsImpls.foreach(e => copy(e._2))
+        PeerDefs.foreach(peer => dependencyResolver.getAssocEntryPointsOfPeer(peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef]).foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
 
         val network = new Network(plugin.io)(buildPath)
-        val builder = new Builder(plugin.io)(network).getBuilder(locs, buildPath.toFile)
-        val composer = new Compose(plugin.io).getComposer(locs, buildPath.toFile)
+        val builder = new Builder(plugin.io)(network).getBuilder(locs.toList.flatMap(_._2), buildPath.toFile)
+        val composer = new Compose(plugin.io)(buildPath.toFile)
 
         //plugin.classPath.asClassPathString
         builder.collectLibraryDependencies(buildPath)
@@ -154,11 +154,17 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           builder.buildDockerImages()
           //runner.runLandscape(locs)
         }
-        if(Options.stage >= Options.publish){
+        if(Options.stage >= Options.publish) {
           builder.publishDockerImagesToRepo()
-          composer.buildDockerCompose()
-          composer.buildDockerSwarm()
-          composer.runDockerSwarm()
+        }
+        if(Options.stage >= Options.compose){
+          //todo were here
+          locs.foreach{ l =>
+            val compose = composer.getComposer(l._1.nameString, l._2)
+            compose.buildDockerCompose()
+            compose.buildDockerSwarm(locs.toList.map(_._1.nameString))
+          }
+          //compose.runDockerSwarm()
           //runner.Swarm.init()
           //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
         }

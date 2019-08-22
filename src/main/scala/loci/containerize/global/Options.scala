@@ -23,8 +23,9 @@ package object Options {
   val labelPrefix = "com.loci.containerize"
 
   case object file extends Stage{ def id = 1 }
-  case object image extends Stage { def id = 2 }
+  case object image extends Stage{ def id = 2 }
   case object publish extends Stage{ def id = 3 }
+  case object compose extends Stage{ def id = 4 }
 
   var containerize : Boolean = false
 
@@ -42,15 +43,19 @@ package object Options {
   val networkDir : String = "network"
 
   var os : String = if (PlatformUtil.isWindows) "windows" else "linux"
-  def osExt : String = if (os == "windows") "bat" else "sh"
+  def osExt : String = "sh"
+
+  var platform : String = "linux"
+  def plExt : String = "sh" //todo this also requires cygwin inside containers if windows
 
   /**
     * options and their default values.
     */
-  var swarmName : String = "LociContainerizedSwarm"
+  private var _swarmName : String = if(Check ? getClass.getPackage) getClass.getPackage.getImplementationTitle else "Containerized_ScalaLoci_Project"
+  def swarmName : String = _swarmName
 
   var jar : Boolean = true
-  var stage : Stage = publish
+  var stage : Stage = compose
 
   var nocache : Boolean = false
   var showInfos : Boolean = true
@@ -66,8 +71,6 @@ package object Options {
   val defaultContainerHost = "127.0.0.1"
   val defaultContainerVersion = "1.0"
 
-  var platform : String = "linux"
-  def plExt : String = if (platform == "windows") "bat" else "sh"
 
   //todo not good, maybe we really ned it as compile opt
   val targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
@@ -144,7 +147,7 @@ package object Options {
 
       case "save-images" => saveImages = true
 
-      case s if s.startsWith("name=") => swarmName = s.substring("name=".length).toLowerCase
+      case s if s.startsWith("name=") => _swarmName = s.substring("name=".length).toLowerCase
 
       case s if s.startsWith("repo=") => dockerRepository = s.substring("repo=".length).toLowerCase
       case s if s.startsWith("user=") => dockerUsername = s.substring("user=".length)

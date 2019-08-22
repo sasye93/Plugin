@@ -32,9 +32,9 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
   implicit def gClassSymbolConvert(c : plugin.global.ClassSymbol) : this.global.ClassSymbol = c.asInstanceOf[this.global.ClassSymbol]
 
   def isPeer(c : ClassDef) : Boolean = c.impl.parents.map(_.tpe).exists(_ =:= PeerType)
+  def topLevelModule(c : Symbol) : Symbol = if(c.isClass) c.safeOwner.enclClass else c.enclClass
   def topLevelClassHasContainerizationAnnot(c : Symbol) : Boolean = {
-    val parentClass = if(c.isClass) c.safeOwner.enclClass else c.enclClass
-
+    val parentClass = topLevelModule(c)
     parentClass != null && parentClass != NoSymbol &&
       (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.Containerized]) || topLevelClassHasContainerizationAnnot(parentClass))
   }/**
@@ -248,6 +248,7 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
 
           if(topLevelClassHasContainerizationAnnot(c.symbol) && isPeer(c)){
             PeerDefs += new TAbstractClassDef(
+              topLevelModule(c.symbol),
               c.symbol.enclosingPackage.javaClassName,
               className.asInstanceOf[plugin.global.TypeName],
               c.symbol.asInstanceOf[plugin.global.Symbol],
@@ -292,8 +293,8 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
               })
             trees.foreach({
               case s: Select =>
-                cep.containerPeerClass = s.symbol.asInstanceOf[cep.global.Symbol]
-                cep.containerEntryClass = c.symbol.asInstanceOf[cep.global.Symbol]
+                cep.containerPeerClass = s.symbol.asInstanceOf[cep.plugin.global.Symbol]
+                cep.containerEntryClass = c.symbol.asInstanceOf[cep.plugin.global.Symbol]
 
               /** collecting annotations for entry class */
               body.foreach(_.foreach({
@@ -339,7 +340,7 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
                           }
                           case _ => reporter.error(null, "XXX"); NoSymbol
                         }
-                      cep.addEndPoint(cep.ConnectionEndPoint(connectionPeer.asInstanceOf[cep.global.TypeSymbol], port, host, conFun.symbol.simpleName.toString))
+                      cep.addEndPoint(cep.ConnectionEndPoint(connectionPeer.asInstanceOf[cep.plugin.global.TypeSymbol], port, host, conFun.symbol.simpleName.toString))
                     case _ =>
                   }
                 case _ =>

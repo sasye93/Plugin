@@ -6,6 +6,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.nio.file.Path
 
+import loci.containerize.AST.DependencyResolver
 import loci.containerize.IO.Logger
 import loci.containerize.container.Runner
 
@@ -51,6 +52,8 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
 
   val runner : Runner = new Runner(logger)
 
+  val dependencyResolver : DependencyResolver[Containerize] = new DependencyResolver[Containerize]()
+
   var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
   //todo algos always operate on here, mutating. change!
   var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
@@ -62,6 +65,7 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   //todo classfiles as ref?
   //todo replace null with option
   case class AbstractClassDef[T <: global.Type, TN <: global.TypeName, S <: global.Symbol](
+                               module : S,
                                packageName : String,
                                className : TN,
                                classSymbol : S,
@@ -96,5 +100,7 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
     def weakSymbolCompare(symbol1 : Symbol, symbol2 : Symbol) : Boolean = symbol1.fullName == symbol2.fullName
     def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
     def toUnixString(p : Path): String = p.toString.replace("\\", "/")
+    def getNormalizedFullNameDenominator(s : Symbol) : String = loci.container.Tools.getIpString(s.fullNameString)
+    def getNormalizedNameDenominator(s : Symbol) : String = loci.container.Tools.getIpString(s.nameString)
   }
 }

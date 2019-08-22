@@ -118,18 +118,19 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       dirs.foreach(d => {
         val relativeCP = getRelativeContainerPath(d).toString
 
-        val CMD = //todo hardcoded
-          s"FROM ${ Options.libraryBaseImageTag } \r\n" +
-          s"LABEL ${ Options.labelPrefix }.description=" + "\"todo\" \r\n" + //todo descr macro
-          s"LABEL ${ Options.labelPrefix }.version=1.0 \r\n" +  //todo vers macro
-            s"WORKDIR ${ Options.containerHome } \r\n" +
-            s"COPY ./run.$plExt ./*.jar ./ \r\n" +
-            //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
+        val CMD = //todo hardcoded //todo vers macro //todo descr macro
+          s"""FROM ${ Options.libraryBaseImageTag }
+          |LABEL ${ Options.labelPrefix }.description="todo"
+          |LABEL ${ Options.labelPrefix }.version=1.0
+          |WORKDIR ${ Options.containerHome }
+          |COPY ./run.$plExt ./*.jar ./""".stripMargin + "\n" +
             (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\r\n" +
-            Check ?=> (d.entryPoint.setupScript,
-              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \r\n" +  //todo can we just run it without copy? layers!
+            Check ?=> (d.entryPoint.setupScript,  //todo can we just run it without copy? layers!
+              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \r\n" +
                 s"RUN ${Options.containerHome}preRunSpecific.$plExt \r\n", "") +
             s"ENTRYPOINT ./run.$plExt \r\n"
+            //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
+
 
         if(Check ? d.entryPoint.setupScript)
           Files.copy(d.entryPoint.setupScript.toPath, Paths.get(d.getTempPathString, s"preRunSpecific.$plExt"), REPLACE_EXISTING)
@@ -199,20 +200,21 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
     def buildDockerStartScripts() : Unit = {
       //todo we run containers => jedes mal wird neuer container created, danach nur gestoppt, existiert dann aber weiter => existing containers block creation with same name, also: possibly update instead of recreate?
       dirs.foreach { d =>
-        val CMD =
-          s"docker rm --volumes -f ${ d.getImageName }\n" + //todo -v flag ok? removes volume associated
-          s"docker volume create ${ d.getImageName } \n" + //todo -a flag?
-          s"docker run -id ${ d.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName } \n" +
-          "docker container inspect -f \"Container '" + d.getImageName + "' connected to " + network.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + d.getImageName + "\n"
+        val CMD = //todo -v flag ok? removes volume associated //todo -a flag?
+          s"""docker rm --volumes -f ${ d.getImageName }
+          |docker volume create ${ d.getImageName }
+          |docker run -id ${ d.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName }
+          |docker container inspect -f \"Container '""".stripMargin + d.getImageName + "' connected to " + network.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + d.getImageName + "\n"
+
         io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"RunContainer.$osExt"))//todo add -p, .sh
       }
     }
     def buildDockerStopScripts() : Unit = {
       dirs.foreach { d =>
         val CMD =
-            s"docker network disconnect ${ network.getName } ${ d.getImageName }\n" +
-            s"docker stop ${ d.getImageName } \n" +
-            s"docker container rm -f ${ d.getImageName }"
+            s"""docker network disconnect ${ network.getName } ${ d.getImageName }
+            |docker stop ${ d.getImageName }
+            |docker container rm -f ${ d.getImageName }""".stripMargin
         io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"StopContainer.$osExt"))
       }
     }

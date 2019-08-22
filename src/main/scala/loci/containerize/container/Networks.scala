@@ -26,19 +26,19 @@ class Network[+C <: Containerize](io : IO)(buildDir : Path, network : INetwork =
 
   def buildSetupScript() : Unit = {
     val CMD =
-      "docker network inspect " + getName + " > /dev/null 2>&1\n" +
-        "if [ $? -eq 0 ]; then\n" +
-        "\tdocker network rm " + getName + " > /dev/null 2>&1\n" +
-        "\tif [ $? -ne 0 ]; then\n" +
-        "\t\techo \"Network '" + getName + "' already exists, but could not be removed and re-instantiated. If you want to update the network, you must manually remove the old network by first decoupling all connected containers from the network ('docker container rm <container>'), and then 'docker network rm " + network.name + "'.\"\n" +
-        "\t\texit\n" +
-        "\tfi\n" +
-        "fi\n" +
-        s"docker network create -d $getType $getName\n"
+        s"""docker network inspect ${getName} > /dev/null 2>&1
+        |if [ $$? -eq 0 ]; then
+        | docker network rm ${getName} > /dev/null 2>&1
+        | if [ $$? -ne 0 ]; then
+        |   echo "Network '${getName}' already exists, but could not be removed and re-instantiated. If you want to update the network, you must manually remove the old network by first decoupling all connected containers from the network ('docker container rm <container>'), and then 'docker network rm ${network.name}'."
+        |   exit 1
+        | fi
+        |fi
+        |docker network create -d ${getType} ${getName}""".stripMargin
     io.buildFile(io.buildScript(CMD), Paths.get(networkDir.getAbsolutePath, s"NetworkSetup.sh"))  //todo make all sh, or what
   }
   def buildNetwork() : Unit = {
-    Process("bash " + "NetworkSetup.sh", networkDir).!(plugin.logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
+    Process("bash NetworkSetup.sh", networkDir).!(plugin.logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
   }
 
   /**

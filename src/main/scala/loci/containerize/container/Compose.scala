@@ -9,11 +9,11 @@ import loci.containerize.main.Containerize
 import loci.containerize.types.TempLocation
 import sys.process._
 
-class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
+class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C) {
 
-  def getComposer(dirs : List[TempLocation], buildDir : File) : compose = new compose(dirs, buildDir)
+  def getComposer(multiTierModuleName : String, dirs : List[TempLocation]) : compose = new compose(multiTierModuleName, dirs)
 
-  class compose(dirs : List[TempLocation], buildDir : File){
+  class compose(multiTierModuleName : String, dirs : List[TempLocation]){
     val logger : Logger = plugin.logger
     var composePath : File = _
 
@@ -36,64 +36,76 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
         "version: \"3.7\"\n" +
           dirs.foldLeft("services:\n"){ (s, d) =>
             val cfg : ContainerConfig[C] = new ContainerConfig[C](d.entryPoint.config)(io, plugin)
-
             s +
-             s"  ${ d.getImageName }:\n" +
-              s"    # configuration for ${ d.getImageName } (${ cfg.getConfigType }) \n" +
-             s"    image: ${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }\n" +
-              "    deploy:\n" +
-             s"      mode: ${ cfg.getDeployMode }\n" +
-             s"      replicas: ${ cfg.getReplicas }\n" +
-              "      resources:\n" +
-              "        limits:\n" +
-              "          cpus: \"" + cfg.getCPULimit + "\"\n" +
-             s"          memory: ${ cfg.getMemLimit }\n" +
-              "        reservations:\n" +
-              "          cpus: \"" + cfg.getCPUReserve + "\"\n" +
-             s"          memory: ${ cfg.getMemReserve }\n" +
-              "      restart_policy:\n" +
-              "        condition: any\n" +
-              "      rollback_config:\n" +
-              "        order: start-first\n" +
-              "      update_config:\n" +
-              "        parallelism: 2\n" +
-              "        failure_action: rollback\n" +
-              "        order: start-first\n" +
-            /**
-              "    healthcheck:\n" + //todo in dockerfile?
-              "      test: [\"CMD\", \"curl\", \"-f\", \"127.0.0.1\"]\n" +
-              "      interval: 2m\n" +
-              "      timeout: 15s\n" +
-              "      retries: 3\n" +
-              "      start_period: 1m\n" +
-             ***/
-              "    labels:\n" +
-             s"      ${ Options.labelPrefix }.service: " + "\"service\"\n" +
+             s"""  ${ d.getImageName }:
+              |    # configuration for ${ d.getImageName } (${ cfg.getConfigType }) 
+              |    image: ${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }
+              |    deploy:
+              |      mode: ${ cfg.getDeployMode }
+              |      replicas: ${ cfg.getReplicas }
+              |      resources:
+              |        limits:
+              |          cpus: "${ cfg.getCPULimit }"
+              |          memory: ${ cfg.getMemLimit }
+              |        reservations:
+              |          cpus: "${ cfg.getCPUReserve }"
+              |          memory: ${ cfg.getMemReserve }
+              |      restart_policy:
+              |        condition: any
+              |      rollback_config:
+              |        order: start-first
+              |      update_config:
+              |        parallelism: 2
+              |        failure_action: rollback
+              |        order: start-first
+              |    labels:
+              |      ${ Options.labelPrefix }.module: "$multiTierModuleName"
+              |""" +
               (if(d.entryPoint.endPoints.exists(_.way != "connect"))
              s"    ${ d.entryPoint.endPoints.foldLeft("ports:\n")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + "      - \"" + e.port + ":" + e.port + "\"\n") }"
               else "") +
-              "    networks:\n" +
-              "      mynet:\n" +
-              "        aliases:\n" +
-             s"          - ${ d.getImageName }\n"
+              s"""    networks:
+              |      ${Options.swarmName}:
+              |        aliases:
+              |          - ${ d.getImageName }
+              |      ${multiTierModuleName}:
+              |        aliases:
+              |          - ${ d.getImageName }
+              |"""
           } +
-          "  monitor_service: \n" +
-          "    # configuration for monitoring service, running on each master node. \n" +
-          "    image: alexellis2/visualizer-arm:latest \n" +
-          "    deploy:\n" +
-          "      mode: global\n" +
-          "      placement:\n" +
-          "        constraints: [node.role == manager]\n" +
-          "    ports:\n" +
-          "      - \"8080:8080\"\n" +
-          "    volumes:\n" +
-          "      - type: bind\n" +
-          "        source: /var/run/docker.sock\n" +
-          "        target: /var/run/docker.sock\n" +
-          "networks:\n" +
-          "  mynet:\n" +
-          "    driver: overlay\n" +
-          "    attachable: true\n"
+          s"""networks:
+          |  ${Options.swarmName}:
+          |    external: true
+          |  ${multiTierModuleName}:
+          |    driver: overlay
+          |    attachable: true
+          |    internal: false
+          |    name: ${multiTierModuleName}
+          |"""
+
+      /**
+       * monitor_service:
+       * # configuration for monitoring service, running on each master node.
+       * image: alexellis2/visualizer-arm:latest
+       * deploy:
+       * mode: global
+       * placement:
+       * constraints: [node.role == manager]
+       * ports:
+       *       - "8080:8080"
+       * volumes:
+       *       - type: bind
+       * source: /var/run/docker.sock
+       * target: /var/run/docker.sock
+       */
+              /**
+              |    healthcheck: //todo in dockerfile?
+              |      test: [\"CMD\", \"curl\", \"-f\", \"127.0.0.1\"]
+              |      interval: 2m
+              |      timeout: 15s
+              |      retries: 3
+              |      start_period: 1m
+               ***/
       /**
           "sysctl:\n" +
           " net.ipv4.conf.eth0.route_localnet:1\n" +
@@ -102,49 +114,67 @@ class Compose[+C <: Containerize](io : IO)(implicit plugin : C) {
           " - NET_RAW\n"
         */
 
-      io.buildFile(CMD, Paths.get(composePath.getAbsolutePath, "docker-compose.yml"))
+      io.buildFile(CMD.stripMargin, Paths.get(composePath.getAbsolutePath, multiTierModuleName + ".yml"))
     }
+    def buildDockerSwarm(multiTierModules : List[String]) : Unit = {
+      val CMD =
+        s"""docker node ls > /dev/null 2>&1 | grep "Leader"
+           |if [ $$? -ne 0 ]; then
+           |  docker swarm init
+           |fi
+           |docker network inspect ${Options.swarmName} > /dev/null 2>&1
+           |if [ $$? -eq 0 ]; then
+           |  docker network rm ${Options.swarmName} > /dev/null 2>&1
+           |  if [ $$? -ne 0 ]; then
+           |    echo "Could not remove network ${Options.swarmName}. Continuing with the old network. Remove network manually to update it next time."
+           |  fi
+           |fi
+           |docker network create -d overlay --attachable=true ${Options.swarmName}
+           |echo "---------------------------------------------"
+           |echo ">>> Creating stacks from compose files... <<<"
+           |echo "---------------------------------------------"
+           |""" +
+            multiTierModules.foldLeft("")((M, m) => M + {
+              s"docker stack deploy -c $m.yml $m \n" +
+                "if [ $? -eq 0 ]; then\n" +
+                "  echo \"Successfully deployed stack '" + m + ".'\"\n" +
+                "  else\n" +
+                "    echo \"Error while deploying stack '" + m + "', aborting now. Please fix before retrying.\"\n" +
+                "    exit 1\n" + 
+                "fi\n"
+            }) +   //${Options.swarmName}
+        s"""docker service create --publish 8080:8080 --mode global --constraint 'node.role == manager' --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock --name monitor_service alexellis2/visualizer-arm:latest
+           |  docker service inspect ${Options.swarmName}_monitor_service > /dev/null 2>&1
+           |if [ $$? -eq 0 ]; then
+           |  echo "----------------------------------------------------------------------------------"
+           |  echo ">>> Swarm Visualizer running on each master node, reachable at: localhost:8080 <<<"
+           |  echo "----------------------------------------------------------------------------------"
+           |fi
+           |echo "-----------------------"
+           |echo ">>> Nodes in Swarm: <<<"
+           |echo "-----------------------"
+           |docker node ls
+           |docker swarm join-token manager
+           |docker swarm join-token worker
+           |echo "--------------------------"
+           |echo ">>> Services in Swarm: <<<"
+           |echo "--------------------------"
+           |docker service ls
+           |echo "--------------------------"
+           |echo ">> PRESS ANY KEY TO CONTINUE / CLOSE <<"
+           |read -n 1 -s
+           |exit 0
+           |else
+           |  exit 1
+           |"""
+
+      io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
+    }
+
     def runDockerSwarm() : Unit = {
       Process("cmd /k start bash swarm-init.sh", composePath).!!(logger.strong) //todo really make this blocking?
     }
     //$ docker service rm my-nginx
     //$ docker network rm nginx-net nginx-net-2
-
-    def buildDockerSwarm() : Unit = {
-      val CMD = {
-        "docker node ls > /dev/null 2>&1 | grep \"Leader\" \n" +
-        "if [ $? -ne 0 ]; then\n" +
-        "   docker swarm init\n" +
-        "fi \n" +
-          s"   docker stack deploy -c docker-compose.yml ${ Options.swarmName /*todo */ }\n" +
-          "   if [ $? -eq 0 ]; then\n" +
-         s"     docker service inspect ${ Options.swarmName /*todo */ }_monitor_service > /dev/null 2>&1 \n" +
-          "     if [ $? -eq 0 ]; then \n" +
-          "     echo \"----------------------------------------------------------------------------------\"\n" +
-          "     echo \">>> Swarm Visualizer running on each master node, reachable at: localhost:8080 <<<\"\n" +
-          "     echo \"----------------------------------------------------------------------------------\"\n" +
-          "     fi \n" +
-          "     echo \"-----------------------\"\n" +
-          "     echo \">>> Nodes in Swarm: <<<\"\n" +
-          "     echo \"-----------------------\"\n" +
-          "     docker node ls\n" +
-          "     docker swarm join-token manager\n" +
-          "     docker swarm join-token worker\n" +
-          "     echo \"--------------------------\"\n" +
-          "     echo \">>> Services in Swarm: <<<\"\n" +
-          "     echo \"--------------------------\"\n" +
-          "     docker service ls\n" +
-          "     echo \"--------------------------\"\n" +
-          "     echo \">> PRESS ANY KEY TO CONTINUE / CLOSE <<\"\n" +
-          "     read -n 1 -s\n" +
-          "     exit 0 \n" +
-          "   else\n" +
-          "     exit 1\n" +
-          " fi\n"
-      }
-
-      io.buildFile(CMD, Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
-    }
-
   }
 }

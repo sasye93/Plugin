@@ -37,7 +37,6 @@ class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends Plug
       //todo enthält classes path, ist aber Option => kein verlass? gibt auch setsingleoutput, evtl als fallback harcoded target path? hmm vll über flag steuern
 
       val traverser : TreeTraverser[C] = new TreeTraverser[C]()
-      val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
 
       reporter.warning(null, global.settings.outputDirs.getSingleOutput.getOrElse(0).toString)
       reporter.warning(null, Options.targetDir.toString)
@@ -60,8 +59,6 @@ class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends Plug
       //traverser.ClassDefs.foreach(x => global.reporter.warning(null, x.classSymbol.javaClassName + x.parentType.toString))
 
       global.cleanup.getEntryPoints.foreach(x=>reporter.info(null, "§entrys: " + x, true))
-
-      if(plugin.PeerDefs.isEmpty) reporter.warning(null, "no peer classes found.")
 
       Options.containerize = plugin.PeerDefs.nonEmpty
       import java.nio.file._

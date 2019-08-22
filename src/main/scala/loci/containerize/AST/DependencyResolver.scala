@@ -8,18 +8,21 @@ import scala.collection.immutable.HashMap
 import scala.tools.nsc.Global
 
 class DependencyResolver[+C <: Containerize](implicit val plugin : C) {
-
   import plugin._
   import plugin.global._
 
+  def getAssocEntryPointsOfPeer(p : TAbstractClassDef) : List[TEntryPointDef] = {
+    EntryPointsImpls.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol.asInstanceOf[plugin.global.Symbol])).toList.map(_._2)
+  }
+  def getAssocEntryPointsOfClassSymbol(c : ClassSymbol) : List[ClassSymbol] = {
+    EntryPointsImpls.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.containerEntryClass.asInstanceOf[plugin.global.ClassSymbol])
+  }
   /**
     * get startup order
     */
+    @deprecated("")
   def startupOrderDependencies() : Map[ClassSymbol, List[ClassSymbol]] = {
-    def getAssocEntryPoints(c : ClassSymbol) : List[ClassSymbol] = {
-      EntryPointsImpls.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.containerEntryClass.asInstanceOf[plugin.global.ClassSymbol])
-    }
-    EntryPointsImpls.foldLeft(HashMap[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPoints(x.connectionPeer.asClass.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
+    EntryPointsImpls.foldLeft(HashMap[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(x.connectionPeer.asClass.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
   }
 
   private def filterInvalid(ep : TEntryPointMap) : TEntryPointMap = ep.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)

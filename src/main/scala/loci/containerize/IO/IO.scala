@@ -169,5 +169,5 @@ class IO(implicit val logger : Logger) {
     else
       f.listFiles().flatMap(file => listDependencies(file.toPath)).toList
   }
-  def buildScript(CMD : String) : String  = (if (Options.os == "linux") "#!/bin/sh \n" else "") + CMD
+  def buildScript(CMD : String) : String  = "#!/bin/sh\n" + CMD.replaceAll("\\r\\n", "\n") //todo shall we support bat?
 }

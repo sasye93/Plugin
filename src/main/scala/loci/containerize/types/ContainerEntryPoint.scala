@@ -15,13 +15,12 @@ import scala.tools.nsc.Global
 //@compileTimeOnly("this class is for internal use only.")
 class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = null)(implicit val plugin : C) {
 
-  val global : Global = plugin.global
-
   import plugin._
-  import global._
+  import plugin.global._
 
-  var containerEntryClass : Symbol = if(init != null) init.containerEntryClass.asInstanceOf[this.global.Symbol] else NoSymbol
-  var containerPeerClass : Symbol = if(init != null) init.containerPeerClass.asInstanceOf[this.global.Symbol] else NoSymbol
+  var containerPeerClass : Symbol = if(init != null) init.containerPeerClass.asInstanceOf[global.Symbol] else NoSymbol
+  var containerEntryClass : Symbol = if(init != null) init.containerEntryClass.asInstanceOf[global.Symbol] else NoSymbol
+
   var containerEndPoints : mutable.MutableList[ConnectionEndPoint] = if(init != null) init.containerEndPoints.map(_.asInstanceOf[this.ConnectionEndPoint]) else mutable.MutableList()
 
   var containerJSONConfig : File = _
@@ -36,7 +35,7 @@ class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = nu
   def addEndPoint(connectionEndPoint: ConnectionEndPoint) : mutable.MutableList[ConnectionEndPoint] = containerEndPoints += connectionEndPoint
   def getDefaultEndpoint(connectionPeer : Symbol) : ConnectionEndPoint = ConnectionEndPoint(connectionPeer)
 
-  def getLocDenominator : String = containerEntryClass.javaBinaryNameString.replace("$", "_") + "_" + containerPeerClass.fullNameString.replace("$", "_")
+  def getLocDenominator : String = plugin.toolbox.getNormalizedNameDenominator(containerPeerClass) + "/" + plugin.toolbox.getNormalizedNameDenominator(containerEntryClass)
 
   def entryClassDefined() : Boolean = containerEntryClass != NoSymbol
   def peerClassDefined() : Boolean = containerPeerClass != NoSymbol
@@ -72,5 +71,17 @@ class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = nu
     )
   }
 }
-case class SimplifiedContainerEntryPoint(entryClassSymbolString : String, peerClassSymbolString : String, config : File, setupScript : File, endPoints : List[SimplifiedConnectionEndPoint])
-case class SimplifiedConnectionEndPoint(connectionPeerSymbolString : String, port : Integer, host : String, way : String, version : String)
+case class SimplifiedContainerEntryPoint(
+                                          entryClassSymbolString : String,
+                                          peerClassSymbolString : String,
+                                          config : File,
+                                          setupScript : File,
+                                          endPoints : List[SimplifiedConnectionEndPoint]
+                                        )
+case class SimplifiedConnectionEndPoint(
+                                         connectionPeerSymbolString : String,
+                                         port : Integer,
+                                         host : String,
+                                         way : String,
+                                         version : String
+                                       )
