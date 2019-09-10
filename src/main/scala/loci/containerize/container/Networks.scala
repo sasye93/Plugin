@@ -9,11 +9,11 @@ import loci.containerize.{Check, Options}
 import loci.containerize.main.Containerize
 import java.nio.file.Path
 
-sealed trait INetwork{ def _type : String; def name : String }
-case object Bridge extends INetwork{ val _type = "bridge"; val name = "mynet"; }
-case object Overlay extends INetwork{ val _type = "overlay"; val name = "mynet"; }
+sealed trait INetwork{ def _type : String; }
+case object Bridge extends INetwork{ val _type = "bridge"; }
+case object Overlay extends INetwork{ val _type = "overlay"; }
 
-class Network[+C <: Containerize](io : IO)(buildDir : Path, network : INetwork = Bridge)(implicit plugin : C){
+class Network(io : IO)(val name : String, buildDir : Path, network : INetwork = Overlay)(implicit plugin : Containerize){
 
   private var networkDir : File = _
 
@@ -21,7 +21,7 @@ class Network[+C <: Containerize](io : IO)(buildDir : Path, network : INetwork =
     case Some(f) => networkDir = f
     case None => plugin.logger.error(s"Could not create directory for network scripts inside: $buildDir")
   }
-  def getName : String = network.name
+  def getName : String = name
   def getType : String = network._type
 
   def buildSetupScript() : Unit = {
@@ -30,7 +30,7 @@ class Network[+C <: Containerize](io : IO)(buildDir : Path, network : INetwork =
         |if [ $$? -eq 0 ]; then
         | docker network rm ${getName} > /dev/null 2>&1
         | if [ $$? -ne 0 ]; then
-        |   echo "Network '${getName}' already exists, but could not be removed and re-instantiated. If you want to update the network, you must manually remove the old network by first decoupling all connected containers from the network ('docker container rm <container>'), and then 'docker network rm ${network.name}'."
+        |   echo "Network '${getName}' already exists, but could not be removed and re-instantiated. If you want to update the network, you must manually remove the old network by first decoupling all connected containers from the network ('docker container rm <container>'), and then 'docker network rm ${getName}'."
         |   exit 1
         | fi
         |fi

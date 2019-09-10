@@ -30,15 +30,12 @@ class Runner(logger : Logger) {
   def dockerDeamonStartUp() : Boolean = {
     //todo see doc
     logger.info("Starting docker deamon, this can take a while...")
-    if(Process("dockerd").!(logger) == 0) {
-      true
-    }
-    else{
+    Process("dockerd").!(logger) == 0 || {
       logger.error("Could not start docker deamon. Please start it manually and try again.")
       false
     }
   }
-  //check if this goes to far, maybe -filter it
+  //todo check if this goes to far, maybe -filter it
   def dockerCleanup() : Unit = {
     if(Options.cleanup){
       (Process(s"docker image prune -f") #&&
@@ -48,7 +45,8 @@ class Runner(logger : Logger) {
     }
   }
   def dockerLogin(username : String = Options.dockerUsername, password : String = Options.dockerPassword, host : String = Options.dockerHost) : Unit = {
-    if(Process(s"docker login -u $username -p $password $host").!(logger.weak) != 0){
+    //todo pw sec
+    if((Process("echo \"" + password + "\"") #| Process(s"docker login --username $username --password-stdin $host")).!(logger.weak) != 0){
       logger.error(s"Login failed for ${ if(host == "") "DockerHub" else host }, please check you supplied the correct credentials via -P:loci.containerize:username=XXX and -P:loci.containerize:password=XXX")
     }
   }
@@ -69,12 +67,12 @@ class Runner(logger : Logger) {
   object Swarm{
     def init() : Unit = {
       if(Process(s"docker swarm init").!(logger) != 0){
-        logger.error(s"Error when trying to initialize Docker Swarm.")
+        logger.error(s"Error while trying to initialize Docker Swarm.")
       }
     }
     def deploy(appName : String, composeFile : Path) : Unit = {
       if(Process("docker stack deploy -c \"" + composeFile.toAbsolutePath.toString + "\" " + appName).!(logger) != 0){
-        logger.error(s"Error when trying to deploy swarm stack.")
+        logger.error(s"Error while trying to deploy swarm stack.")
       }
     }
   }

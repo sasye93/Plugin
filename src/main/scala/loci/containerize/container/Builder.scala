@@ -21,20 +21,21 @@ import scala.util.Try
 //todo apt-get working with alpine? also in external script?
 //todo line endings
 
-class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin : C){
+class Builder(io : IO)(implicit plugin : Containerize){
 
+  import plugin.global
   import plugin.toolbox
 
-  def getBuilder(dirs : List[TempLocation], buildDir : File) : build = new build(dirs, buildDir)
+  def getBuilder(dirs : Map[String, List[TempLocation]], buildDir : File) : build = new build(dirs, buildDir)
 
-  class build(dirs : List[TempLocation], buildDir : File){
+  class build(dirs : Map[String, List[TempLocation]], buildDir : File){
 
     //todo get proper error code
     //todo if existing, juzst update
 
     implicit val logger : Logger = plugin.logger
 
-    private val dependencyResolver : DependencyResolver[C] = new DependencyResolver[C]()
+    private val dependencyResolver : DependencyResolver = new DependencyResolver()
 
     var libraryPath : Path = _
     val plExt : String = Options.plExt
@@ -66,15 +67,15 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
       val dependencies : List[String] = dependencyResolver.classPathDependencies().map(Options.libraryPathPrefix + _.getFileName) ++ dependencyResolver.classJRELibs()
       val CMD =
-        "Manifest-Version: 1.0 \r\n" +
-          "Main-Class: " + directory.entryPoint.entryClassSymbolString + " \r\n" +
-          dependencies.foldLeft("Class-Path: ")((c, p) => c + p + " \r\n ") +
-          "\r\n"
+        s"""Manifest-Version: 1.0
+           |Main-Class: ${ directory.entryPoint.entryClassSymbolString }
+           |""" +
+          dependencies.foldLeft("Class-Path: ")((C, p) => C + p + " \n ") + "\n"
 
-      io.buildFile(CMD, Paths.get(directory.getTempPathString, "MANIFEST.MF"))
+      io.buildFile(CMD.stripMargin, Paths.get(directory.getTempPathString, "MANIFEST.MF"))
     }
     def buildJARS() : Unit = {
-      dirs.foreach(d => {
+      dirs.flatMap(_._2).foreach(d => {
         val workDir : File = new File(d.getTempUri)
         val manifest = buildMANIFEST(d).orNull
         if(Process("jar -cfm ./" + d.getJARName + ".jar MANIFEST.MF -C classfiles . ", workDir).!(logger) == 0){
@@ -99,7 +100,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
         }
       }
 
-      dirs.foreach(d => {
+      dirs.flatMap(_._2).foreach(d => {
         val CMD =
             getIpTablesCmd(d) +
             "java -jar -Dfile.encoding=UTF-8 " + d.getJARName + ".jar"
@@ -115,7 +116,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
       buildDockerBaseFile()
 
-      dirs.foreach(d => {
+      dirs.flatMap(_._2).foreach(d => {
         val relativeCP = getRelativeContainerPath(d).toString
 
         val CMD = //todo hardcoded //todo vers macro //todo descr macro
@@ -123,19 +124,20 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
           |LABEL ${ Options.labelPrefix }.description="todo"
           |LABEL ${ Options.labelPrefix }.version=1.0
           |WORKDIR ${ Options.containerHome }
-          |COPY ./run.$plExt ./*.jar ./""".stripMargin + "\n" +
-            (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\r\n" +
+          |COPY ./run.$plExt ./*.jar ./
+          |""" +
+            (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\n" +
             Check ?=> (d.entryPoint.setupScript,  //todo can we just run it without copy? layers!
-              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \r\n" +
-                s"RUN ${Options.containerHome}preRunSpecific.$plExt \r\n", "") +
-            s"ENTRYPOINT ./run.$plExt \r\n"
+              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \n" +
+                s"RUN ${Options.containerHome}preRunSpecific.$plExt \n", "") +
+            s"ENTRYPOINT ./run.$plExt \n"
             //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
 
 
         if(Check ? d.entryPoint.setupScript)
           Files.copy(d.entryPoint.setupScript.toPath, Paths.get(d.getTempPathString, s"preRunSpecific.$plExt"), REPLACE_EXISTING)
 
-        io.buildFile(CMD, Paths.get(d.getTempPathString, "Dockerfile"))
+        io.buildFile(CMD.stripMargin, Paths.get(d.getTempPathString, "Dockerfile"))
 
         //# Copy the current directory contents into the container at /app
         //COPY . /appupickle
@@ -149,23 +151,28 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
         //CMD ["python", "app.py"]
       })
     }
-    def buildDockerBaseFile() : Unit = {
-      val CMD =
-        s"FROM ${Options.jreBaseImage} \r\n" +
-          s"ENV SCALA_VERSION=${ util.Properties.versionNumberString } \r\n" +  //todo vers ok?
-          "WORKDIR / \r\n" +
-          s"RUN mkdir -p ${ Options.containerHome } && mkdir -p ${Options.libraryPathPrefix} \r\n" +
-          s"RUN apt-get update && apt-get install iptables net-tools iputils-ping -y \r\n" + //todo seems to work only with update...
-          s"COPY . ${Options.libraryPathPrefix} \r\n" + //todo copy only libs
+    def buildDockerBaseFile() : Unit = {//todo vers ok? //todo apt-get seems to work only with update... //todo copy only libs
+      val CMD = //todo COPY --from=0 / / ? or whatever, hauptsache multiple builds work
+        s"""FROM ${Options.jreBaseImage} AS jre-build
+           ${ Options.dbBaseImage match{ case Some(db) => s"|COPY --from=$db / /" case None => "" } }
+           ${ Options.customBaseImage match{ case Some(custom) => s"|COPY --from=$custom / /" case None => "" } }
+           |ENV SCALA_VERSION=${ util.Properties.versionNumberString }
+           |WORKDIR /
+           |RUN apt-get update && apt-get install iptables net-tools iputils-ping -y
+           |RUN groupadd -r ${Options.swarmName} && useradd --no-log-init -r -g ${Options.swarmName} ${Options.swarmName}
+           |RUN mkdir -p ${Options.containerHome} && mkdir -p ${Options.libraryPathPrefix} && chown ${Options.swarmName}:${Options.swarmName} ${Options.containerHome} && chown ${Options.swarmName}:${Options.swarmName} ${Options.libraryPathPrefix}
+           |USER ${Options.swarmName}:${Options.swarmName}
+           |COPY . ${Options.libraryPathPrefix}
+           |""" +
           Check ?=>[String] (Options.getSetupScript.orNull,
-            s"COPY ./preRun.$plExt ${Options.libraryPathPrefix}preRun.$plExt \r\n" +  //todo can we just run it without copy? layers!
-            s"RUN ${ Options.libraryPathPrefix }preRun.$plExt \r\n", "")
+            s"COPY ./preRun.$plExt ${Options.libraryPathPrefix}preRun.$plExt \n" +  //todo can we just run it without copy? layers!
+            s"RUN ${ Options.libraryPathPrefix }preRun.$plExt \n", "")
 
       Options.getSetupScript match{
         case Some(f) => Files.copy(f.toPath, Paths.get(libraryPath.toString, s"preRun.$plExt"), REPLACE_EXISTING)
         case None =>
     }
-      io.buildFile(CMD, Paths.get(libraryPath.toString, "Dockerfile"))
+      io.buildFile(CMD.stripMargin, Paths.get(libraryPath.toString, "Dockerfile"))
     }
     //todo cache etc., takes long
     //todo get proper err code, res.: own DNS
@@ -173,7 +180,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
 
       Process(s"bash BuildBaseImage.$osExt", libraryPath.toFile).!!(logger)
 
-      dirs.foreach{ d =>
+      dirs.flatMap(_._2).foreach{ d =>
         Process("bash " + "BuildContainer." + s"$osExt" + "\"", d.getTempFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
         /**
         val peerDir : File = new File(getRelativeContainerPath(d).toString)//todo check if same begin
@@ -188,7 +195,7 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
       io.buildFile(io.buildScript(CMD), Paths.get(libraryPath.toAbsolutePath.toString, s"BuildBaseImage.$osExt"))
     }
     def buildDockerImageBuildScripts() : Unit = {
-      dirs.foreach { d =>
+      dirs.flatMap(_._2).foreach { d =>
         val peerDir : File = new File(getRelativeContainerPath(d).toString)//todo check if same begin
         val dirDepth : String = "../" * (peerDir.getPath.count(c => c == '/' || c == '\\') + 1)
         val CMD =
@@ -197,38 +204,46 @@ class Builder[+C <: Containerize](io : IO)(network : Network[C])(implicit plugin
         io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"BuildContainer.$osExt"))
       }
     }
-    def buildDockerStartScripts() : Unit = {
+    def buildDockerRunScripts() : Unit = {
       //todo we run containers => jedes mal wird neuer container created, danach nur gestoppt, existiert dann aber weiter => existing containers block creation with same name, also: possibly update instead of recreate?
-      dirs.foreach { d =>
-        val CMD = //todo -v flag ok? removes volume associated //todo -a flag?
-          s"""docker rm --volumes -f ${ d.getImageName }
-          |docker volume create ${ d.getImageName }
-          |docker run -id ${ d.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ d.getImageName } --network=${ network.getName } --mount source=${ d.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ d.getImageName }
-          |docker container inspect -f \"Container '""".stripMargin + d.getImageName + "' connected to " + network.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + d.getImageName + "\n"
+      val globalNet = new Network(plugin.io)(Options.swarmName, buildDir.toPath)
+      globalNet.buildSetupScript()
+      globalNet.buildNetwork()
+      dirs.keys.foreach{ module =>
+        val moduleNet = new Network(plugin.io)(module, buildDir.toPath)
 
-        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"RunContainer.$osExt"))//todo add -p, .sh
-      }
-    }
-    def buildDockerStopScripts() : Unit = {
-      dirs.foreach { d =>
-        val CMD =
-            s"""docker network disconnect ${ network.getName } ${ d.getImageName }
-            |docker stop ${ d.getImageName }
-            |docker container rm -f ${ d.getImageName }""".stripMargin
-        io.buildFile(io.buildScript(CMD), Paths.get(d.getTempPathString, s"StopContainer.$osExt"))
+        dirs.getOrElse(module, List()).foreach{ loc =>
+//todo network switch for global net on off
+          val CMDStart = //todo -v flag ok? removes volume associated //todo -a flag?
+            s"""docker rm --volumes -f ${ loc.getImageName }
+               |docker volume create ${ loc.getImageName }
+               |docker run -id ${ loc.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ loc.getImageName } --network=${ globalNet.getName } --network=${ moduleNet.getName } --mount source=${ loc.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ loc.getImageName }
+               |docker container inspect -f \"Container '""".stripMargin + loc.getImageName + "' connected to " + globalNet.getName + " and " + moduleNet.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + loc.getImageName + "\n"
+
+          val CMDStop =
+            s"""docker network disconnect ${ globalNet.getName } ${ loc.getImageName }
+               |docker network disconnect ${ moduleNet.getName } ${ loc.getImageName }
+               |docker stop ${ loc.getImageName }
+               |docker container rm -f ${ loc.getImageName }""".stripMargin
+
+          io.buildFile(io.buildScript(CMDStart), Paths.get(loc.getTempPathString, s"RunContainer.$osExt"))//todo add -p, .sh
+          io.buildFile(io.buildScript(CMDStop), Paths.get(loc.getTempPathString, s"StopContainer.$osExt"))
+        }
+        moduleNet.buildSetupScript()
+        moduleNet.buildNetwork()
       }
     }
 
     def publishDockerImagesToRepo() : Unit = {
-      dirs.foreach{ d =>
+      dirs.flatMap(_._2).foreach{ d =>
         val imageTag = s"${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }"
         (Process(s"docker tag ${ d.getImageName } $imageTag") #&& Process(s"docker push $imageTag")).!(logger)
       }
     }
-    def saveImageBackups(tags : List[String]): Unit = {
-      tags.foreach{
-        tag =>
-          Process(s"docker save -o ${ tag }.tar ${ tag }").!(logger)
+    def saveImageBackups(): Unit = {
+      io.createDir(Paths.get(plugin.homeDir.getPath, Options.backupDir))
+      dirs.flatMap(_._2).foreach{ d =>
+          Process(s"docker save -o ${ Paths.get(Options.backupDir, d.getImageName) }.tar ${ d.getImageName }", plugin.homeDir).!(logger)
       }
     }
 

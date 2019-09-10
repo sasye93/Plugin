@@ -9,25 +9,26 @@ import loci.containerize.main.Containerize
 import loci.containerize.Options
 import loci.containerize.Check
 
-class ContainerConfig[+C <: Containerize](json : File)(implicit io : IO, implicit private val plugin : C) {
+class ContainerConfig(json : File)(implicit io : IO, implicit private val plugin : Containerize) {
 
   def getConfigType : String = if(Check ? json) s"custom config: ${ json.getName }" else "default config"
 
   //todo check and document if this works
   private val config : String = {
+    plugin.logger.warning("TESTASDSADFAWREW : " + json)
     if(Check ? json) io.readFromFile(json)
     else{
       Options.getSetupConfig(plugin.logger) match{
         case Some(f) => io.readFromFile(f)
-        case None => Options.defaultConfig.JSON
+        case None => plugin.logger.warning("aaNONE"); Options.defaultConfig.JSON
       }
     }
   }
-  private val parsed = JSON.parseFull(config)
+  private val parsed : Option[Any] = JSON.parseFull(config)
 
-  private val map : Map[Any, Any] = parsed match {
-    case Some(e : Map[Any, Any]) => e
-    case None => plugin.logger.error(s"Parsing JSON config for entry point failed, path: ${ if(Check ? json) json.toString else "- default options (please supply a config file)" }. Invalid syntax?"); null
+  private val map : Map[String, Any] = parsed match {
+    case Some(e : Map[String, Any]) => e
+    case None => plugin.logger.error(s"Parsing JSON config for entry point failed, ${ if(Check ? json) "path: " + json.toString + ". Invalid syntax?" else "default options seem to be broke (internal failure). Please supply a manual config file with @config." }"); null
   }
 
   private def getValueOfKey(key : String) : Option[Any] = Check ?=>[Option[Any]] (this.map, this.map.get(key), None)
@@ -48,5 +49,8 @@ class ContainerConfig[+C <: Containerize](json : File)(implicit io : IO, implici
   def getMemLimit : String = getStringOfKey("memory_limit").getOrElse(Options.defaultConfig.memory_limit)
   def getMemReserve : String = getStringOfKey("memory_reserve").getOrElse(Options.defaultConfig.memory_reserve)
   def getDeployMode : String = getStringOfKey("deploy_mode").getOrElse(Options.defaultConfig.deploy_mode)
+
+  //Non-Docker specific
+  def getNetworkMode : String = getStringOfKey("network_mode").getOrElse(Options.defaultConfig.network_mode)
 
 }

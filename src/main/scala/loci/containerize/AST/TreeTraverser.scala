@@ -1,5 +1,6 @@
 package loci.containerize.AST
 
+import java.io.File
 import java.nio.file.Paths
 
 import loci.containerize.IO.ContainerConfig
@@ -8,23 +9,24 @@ import loci.containerize.Options
 import loci.containerize.types.ContainerEntryPoint
 
 import scala.collection.immutable.HashMap
+import scala.collection.mutable
 import scala.tools.nsc.Global
 import scala.language.implicitConversions
+import scala.reflect.io.AbstractFile
 
-class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
+class TreeTraverser(implicit val plugin : Containerize) {
 
   implicit val global : Global = plugin.global
 
   import plugin._
   import global._
 
-  type TAbstractClassDef = AbstractClassDef[plugin.global.Type, plugin.global.TypeName, plugin.global.Symbol]
-
   //todo ousource
   private val PeerType = typeOf[loci.Peer]
 
   def traverse[T >: Tree](tree : T) : Unit = {
     TreeTraverser.traverse(tree.asInstanceOf[this.global.Tree])
+    EntryPointsImpls = dependencyResolver.dependencies(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap]).asInstanceOf[TEntryPointMap]
   }
   implicit def pSymbolConvert(c : this.global.Symbol) : plugin.global.Symbol = c.asInstanceOf[plugin.global.Symbol]
   implicit def gSymbolConvert(c : plugin.global.Symbol) : this.global.Symbol = c.asInstanceOf[this.global.Symbol]
@@ -55,16 +57,16 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
     case _ => NoSymbol
   }
   def getEnclClass(t : Tree) : ClassSymbol = (if(t.symbol != null && t.symbol.enclClass != null) t.symbol.enclClass else NoSymbol).asClass
-  def getEntryPointsKeyBySubclass(subClass : ClassSymbol): Symbol = {
-    EntryPointsImpls.keys.collectFirst{case c if subClass.isSubClass(c) => c }.getOrElse(NoSymbol).asInstanceOf[global.Symbol]
+  def getEntryPointsKeyBySubclass(entryPoints : TEntryPointMap, subClass : ClassSymbol): Symbol = {
+    entryPoints.keys.collectFirst{case c if subClass.isSubClass(c) => c }.getOrElse(NoSymbol).asInstanceOf[global.Symbol]
   }
-  def getOrUpdateEntryPointsImpl(className : ClassSymbol): TEntryPointDef = {
+  def getOrUpdateEntryPointsImpl(entryPoints : TEntryPointMap, className : ClassSymbol): TEntryPointDef = {
     //todo better
-    EntryPointsImpls.getOrElseUpdate(className, new ContainerEntryPoint()(plugin))
+    entryPoints.getOrElseUpdate(className, new ContainerEntryPoint()(plugin))
   }
-  def updateEntryPointsImpl(className : ClassSymbol, cep : TEntryPointDef) : Unit = {
+  def updateEntryPointsImpl(entryPoints : TEntryPointMap, className : ClassSymbol, cep : TEntryPointDef) : Unit = {
     //todo better
-    EntryPointsImpls.update(className, cep)
+    entryPoints.update(className, cep)
   }
 
   private object TreeTraverser extends Traverser{
@@ -276,7 +278,7 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
           if(!c.symbol.isSynthetic && !c.symbol.isAnonymousClass /**global.cleanup.getEntryPoints.contains(c.symbol.fullNameString)*/) {
 
             //todo we create new even if this is not entry point
-            val cep = getOrUpdateEntryPointsImpl(c.symbol.asClass)
+            val cep = getOrUpdateEntryPointsImpl(EntryPointsImpls, c.symbol.asClass)
 
             val trees =
               body.flatMap(b => b.filter({
@@ -348,7 +350,7 @@ class TreeTraverser[+C <: Containerize](implicit val plugin : C) {
               case _ =>
             })
 
-            updateEntryPointsImpl(c.symbol.asClass, cep)
+            updateEntryPointsImpl(EntryPointsImpls, c.symbol.asClass, cep)
           }
           body.foreach(traverse)
       }

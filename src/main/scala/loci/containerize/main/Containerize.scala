@@ -22,7 +22,7 @@ import scala.collection.mutable
 import scala.collection.immutable
 
 /**
-  * you can provide options using "-P:loci.containerize:<opt1>,<opt2>,..."
+  * you can provide options using "-P:containerize:<opt1>,<opt2>,..."
   *
   */
 
@@ -42,8 +42,8 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val description : String = Options.pluginDescription
 
   val components : List[PluginComponent] = List[PluginComponent](
-    new AnalyzeComponent[Containerize](),
-    new BuildComponent[Containerize]()
+    new AnalyzeComponent(),
+    new BuildComponent()
   )
 
   val outputDir : File = Paths.get(global.currentSettings.outputDirs.getSingleOutput.getOrElse(Options.targetDir).toString).toFile
@@ -51,29 +51,31 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val classPath : util.ClassPath = global.classPath
 
   val runner : Runner = new Runner(logger)
+  val dependencyResolver : DependencyResolver = new DependencyResolver()
 
-  val dependencyResolver : DependencyResolver[Containerize] = new DependencyResolver[Containerize]()
-
-  var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
   //todo algos always operate on here, mutating. change!
-  var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
+  private[containerize] var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
+  private[containerize] var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
 
   type TAbstractClassDef = AbstractClassDef[Type, TypeName, Symbol]
-  type TEntryPointDef = ContainerEntryPoint[Containerize]
+  type TEntryPointDef = ContainerEntryPoint
   type TEntryPointMap = mutable.HashMap[ClassSymbol, TEntryPointDef]
+
+  class ccSymbol(s : Symbol){
+  }
 
   //todo classfiles as ref?
   //todo replace null with option
   case class AbstractClassDef[T <: global.Type, TN <: global.TypeName, S <: global.Symbol](
-                               module : S,
-                               packageName : String,
-                               className : TN,
-                               classSymbol : S,
-                               parentType : List[T],
-                               outputPath : File = null,
-                               filePath : AbstractFile = null,
-                               //classFiles : List[AbstractClassDef[Type, TypeName, Symbol]] = List() //currently unused
-                             )
+                                                                                            module : S,
+                                                                                            packageName : String,
+                                                                                            className : TN,
+                                                                                            classSymbol : S,
+                                                                                            parentType : List[T],
+                                                                                            outputPath : Option[File] = None, //todo not used
+                                                                                            filePath : Option[AbstractFile] = None, //todo not used
+                                                                                            //classFiles : List[AbstractClassDef[Type, TypeName, Symbol]] = List() //currently unused
+                                                                                          )
 
   override def init(options: List[String], error: String => Unit): Boolean = {
     processOptions(options, error)

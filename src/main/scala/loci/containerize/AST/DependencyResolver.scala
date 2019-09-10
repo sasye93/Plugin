@@ -7,33 +7,34 @@ import loci.containerize.main.Containerize
 import scala.collection.immutable.HashMap
 import scala.tools.nsc.Global
 
-class DependencyResolver[+C <: Containerize](implicit val plugin : C) {
-  import plugin._
-  import plugin.global._
+class DependencyResolver(implicit val plugin : Containerize) {
 
-  def getAssocEntryPointsOfPeer(p : TAbstractClassDef) : List[TEntryPointDef] = {
-    EntryPointsImpls.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol.asInstanceOf[plugin.global.Symbol])).toList.map(_._2)
+  import plugin._
+  import global._
+
+  def getAssocEntryPointsOfPeer(entryPoints : TEntryPointMap, p : TAbstractClassDef) : List[TEntryPointDef] = {
+    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol.asInstanceOf[plugin.global.Symbol])).toList.map(_._2)
   }
-  def getAssocEntryPointsOfClassSymbol(c : ClassSymbol) : List[ClassSymbol] = {
-    EntryPointsImpls.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.containerEntryClass.asInstanceOf[plugin.global.ClassSymbol])
+  def getAssocEntryPointsOfClassSymbol(entryPoints : TEntryPointMap, c : ClassSymbol) : List[ClassSymbol] = {
+    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.containerEntryClass.asInstanceOf[plugin.global.ClassSymbol])
   }
   /**
     * get startup order
     */
     @deprecated("")
-  def startupOrderDependencies() : Map[ClassSymbol, List[ClassSymbol]] = {
-    EntryPointsImpls.foldLeft(HashMap[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(x.connectionPeer.asClass.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
+  def startupOrderDependencies(entryPoints : TEntryPointMap) : Map[ClassSymbol, List[ClassSymbol]] = {
+      entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeer.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
   }
 
-  private def filterInvalid(ep : TEntryPointMap) : TEntryPointMap = ep.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
-  private def filterInvalidPeerRefs(ep : TEntryPointMap) : TEntryPointMap = ep.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
+  private def filterInvalid(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
+  private def filterInvalidPeerRefs(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
   //todo test
-  private def checkPeerRefCompleteness(ep : TEntryPointMap) : TEntryPointMap = {
+  private def checkPeerRefCompleteness(entryPoints : TEntryPointMap) : TEntryPointMap = {
     PeerDefs.foreach{ p =>
-      if(!ep.exists(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol)))
+      if(!entryPoints.exists(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol)))
         logger.error(s"No entry point found for peer class ${ p.classSymbol.fullName }, every defined Peer inside the scope of a @loci.containerize annotation must have at least one entry point starting it.")
     }
-    ep
+    entryPoints
   }
 
   //todo include ext?... make option switch //todo excluding java home really ok? ext libs here are unique!
@@ -42,15 +43,9 @@ class DependencyResolver[+C <: Containerize](implicit val plugin : C) {
   }
   def classJRELibs() : List[String] = List("\"$JAVA_HOME/lib\"", "\"$JAVA_HOME/lib/ext\"")
 
-  def dependencies() : Unit = {
+  def dependencies(entryPoints : TEntryPointMap) : TEntryPointMap = {
 
-    EntryPointsImpls = (filterInvalid _ andThen filterInvalidPeerRefs andThen checkPeerRefCompleteness)(EntryPointsImpls)
-    //checkPeerRefCompleteness()
-
-
-    EntryPointsImpls.toList.foreach(x => reporter.info(null, "ENTRYSS: " + x._2.containerJSONConfig, true))
-
-    logger.info("startuporder: " + startupOrderDependencies())
+    (filterInvalid _ andThen filterInvalidPeerRefs andThen checkPeerRefCompleteness)(entryPoints)
 
     /**
     EntryPoints = PeerDefs.map{

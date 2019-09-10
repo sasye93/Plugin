@@ -13,7 +13,7 @@ import scala.collection.mutable
 import scala.tools.nsc.Global
 
 //@compileTimeOnly("this class is for internal use only.")
-class ContainerEntryPoint[+C <: Containerize](init : ContainerEntryPoint[C] = null)(implicit val plugin : C) {
+class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin : Containerize) {
 
   import plugin._
   import plugin.global._

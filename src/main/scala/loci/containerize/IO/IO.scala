@@ -28,7 +28,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to read file ${file.getPath}).")
       case e : Throwable => logger.error(e.getMessage)
     }
     finally{
@@ -43,6 +43,9 @@ class IO(implicit val logger : Logger) {
     try{
       val file : File = new File(path.toUri)
 
+      if(!file.getParentFile.exists())
+        createDirRecursively(file.getParentFile.toPath)
+
       if(file.exists())
         file.delete()
       file.createNewFile()
@@ -55,7 +58,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to build file ${path.getParent.toString}).")
       case e : Throwable => logger.error(e.getMessage)
     }
     finally{
@@ -75,7 +78,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to create dir ${path.toString}).")
       case e : Throwable => logger.error(e.getMessage)
     }
     None
@@ -92,7 +95,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to create dir recursively ${createPath.toString}).")
       case e : Throwable => logger.error(e.getMessage)
     }
     None
@@ -110,7 +113,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to clear dir recursively ${dir.getPath}).")
       case e : Throwable => logger.error(e.getMessage)
     }
   }
@@ -150,7 +153,7 @@ class IO(implicit val logger : Logger) {
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage)
+                _ : IOException) => logger.error(e.getMessage + s" (tried to clear dir recursively ${dir.toString}).")
       case e : Throwable => logger.error(e.getMessage)
     }
     finally{

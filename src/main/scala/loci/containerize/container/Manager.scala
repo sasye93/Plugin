@@ -7,7 +7,7 @@ import loci.containerize.types.TempLocation
 
 import sys.process._
 
-class Manager[+C <: Containerize](implicit plugin : C){
+class Manager(implicit plugin : Containerize){
 
   def serviceExists(d : TempLocation) : Boolean = {
     Process(s"docker service inspect ${ d.getImageName }").! == 0

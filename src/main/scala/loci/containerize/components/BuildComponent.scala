@@ -17,10 +17,10 @@ import scala.tools.nsc.Global
 import loci.containerize.Options
 import loci.containerize.container._
 
-class BuildComponent[+C <: Containerize](implicit val plugin : C) extends PluginComponent{
+class BuildComponent(implicit val plugin : Containerize) extends PluginComponent{
 
   implicit val global : Global = plugin.global
-  implicit val parent : C = plugin
+  implicit val parent : Containerize = plugin
 
   import plugin._
   import global._
@@ -41,6 +41,7 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
     val executed : AtomicBoolean = new AtomicBoolean()
 
     def apply(unit: CompilationUnit) : Unit ={
+      var s1 = System.nanoTime()
 
       if(Options.containerize && executed.compareAndSet(false, true)) {
         reporter.warning(null, "CALL END")
@@ -49,7 +50,7 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           val classFile : AbstractFile = global.genBCode.postProcessorFrontendAccess.backendClassPath.findClassFile(aClass.classSymbol.javaClassName).orNull
           if(classFile == null) reporter.warning(null, s"output file for class not found: ${ aClass.classSymbol.javaClassName }")
 
-          aClass.copy(outputPath = global.genBCode.postProcessorFrontendAccess.compilerSettings.outputDirectory(classFile).file, filePath = classFile)
+          aClass.copy(outputPath = Some(global.genBCode.postProcessorFrontendAccess.compilerSettings.outputDirectory(classFile).file), filePath = Some(classFile))
         }
 
         PeerDefs = PeerDefs.map(pathify)
@@ -131,40 +132,63 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
           //tempSubPath.toFile.deleteOnExit()
         }
 
-        PeerDefs.foreach(peer => dependencyResolver.getAssocEntryPointsOfPeer(peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef]).foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
+        PeerDefs.foreach(peer => dependencyResolver.getAssocEntryPointsOfPeer(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap], peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef]).foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
 
-        val network = new Network(plugin.io)(buildPath)
-        val builder = new Builder(plugin.io)(network).getBuilder(locs.toList.flatMap(_._2), buildPath.toFile)
-        val composer = new Compose(plugin.io)(buildPath.toFile)
+        val builder = new Builder(plugin.io).getBuilder(locs.toMap.map(k => (k._1.nameString, k._2)), buildPath.toFile)
+        val composer = new Compose(plugin.io)(buildPath.toFile).getComposer
 
+        var t0 = System.nanoTime()
+        logger.info(s"first: ${(t0-s1)/1000000000}")
         //plugin.classPath.asClassPathString
         builder.collectLibraryDependencies(buildPath)
         builder.buildJARS()
         builder.buildCMDExec()
         builder.buildDockerFiles()
         builder.createReadme(buildPath)
-        network.buildSetupScript()
-        network.buildNetwork()
+        var t1 = System.nanoTime()
+
+        logger.info(s"t1: ${(t1-t0)/1000000000}")
 
         if(Options.stage >= Options.image){
           builder.buildDockerBaseImageBuildScripts()
+          t0 = System.nanoTime()
+          logger.info(s"t2: ${(t0-t1)/1000000000}")
           builder.buildDockerImageBuildScripts()
-          builder.buildDockerStartScripts()
-          builder.buildDockerStopScripts()
+          t1 = System.nanoTime()
+          logger.info(s"t3: ${(t1-t0)/1000000000}")
+          builder.buildDockerRunScripts()
+          t0 = System.nanoTime()
+          logger.info(s"t4: ${(t0-t1)/1000000000}")
           builder.buildDockerImages()
+          t1 = System.nanoTime()
+          logger.info(s"t5: ${(t1-t0)/1000000000}")
+          if(Options.saveImages)
+            builder.saveImageBackups()
+          t0 = System.nanoTime()
+          logger.info(s"t5: ${(t0-t1)/1000000000}")
           //runner.runLandscape(locs)
         }
         if(Options.stage >= Options.publish) {
-          builder.publishDockerImagesToRepo()
+          /**builder.publishDockerImagesToRepo()*/ //todo uncomment
         }
+        t1 = System.nanoTime()
+        logger.info(s"t6: ${(t1-t0)/1000000000}")
         if(Options.stage >= Options.compose){
           //todo were here
-          locs.foreach{ l =>
-            val compose = composer.getComposer(l._1.nameString, l._2)
-            compose.buildDockerCompose()
-            compose.buildDockerSwarm(locs.toList.map(_._1.nameString))
-            compose.buildDockerSwarmStop(locs.toList.map(_._1.nameString))
-          }
+          locs.foreach(l => composer.buildDockerCompose(l._1.nameString, l._2))
+          t0 = System.nanoTime()
+          logger.info(s"t7: ${(t0-t1)/1000000000}")
+          val stacks = locs.toList.map(_._1.nameString)
+          composer.buildDockerSwarm(stacks)
+          t1 = System.nanoTime()
+          logger.info(s"t8: ${(t1-t0)/1000000000}")
+          composer.buildDockerSwarmStop(stacks)
+          t0 = System.nanoTime()
+          logger.info(s"t9: ${(t0-t1)/1000000000}")
+          composer.buildDockerStack(stacks)
+          t1 = System.nanoTime()
+          logger.info(s"t10: ${(t1-t0)/1000000000}")
+
           //compose.runDockerSwarm()
           //runner.Swarm.init()
           //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
@@ -172,7 +196,9 @@ class BuildComponent[+C <: Containerize](implicit val plugin : C) extends Plugin
         //if(Options.stage.id > 2)
           //runner.runContainer(null)
 
-        logger.info(s"Containerization plugin finished, deployment path: ${ plugin.homeDir.toString }")
+        logger.info(s"Containerization plugin finished, deployment path: ${ buildPath.toString }")
+        var s2 = System.nanoTime()
+        logger.info(s"bp: ${(s2-s1)/1000000000}")
       }
     }
   }

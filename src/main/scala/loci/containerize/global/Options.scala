@@ -3,7 +3,7 @@ package loci.containerize
 import java.io.File
 import java.nio.file.{Path, Paths}
 
-import com.sun.javafx.PlatformUtil
+
 import loci.containerize.IO.Logger
 import loci.containerize.Check
 
@@ -41,8 +41,11 @@ package object Options {
   val libDir : String = "libs"
   val composeDir : String = "compose"
   val networkDir : String = "network"
+  val backupDir : String = "image-backups"
 
-  var os : String = if (PlatformUtil.isWindows) "windows" else "linux"
+  @deprecated("1.0")
+  var os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
+  @deprecated("1.0")
   def osExt : String = "sh"
 
   var platform : String = "linux"
@@ -61,6 +64,7 @@ package object Options {
   var showInfos : Boolean = true
   var cleanup : Boolean = true
   var cleanBuilds : Boolean = true //todo set faflse
+  var saveImages : Boolean = false //todo set faflse; throw warning takes forever
 
   var dockerUsername : String = "sasye93"
   var dockerPassword : String = "Jana101997"
@@ -83,9 +87,15 @@ package object Options {
 
   val libraryBaseImageTag : String = "loci-loci.containerize-library-base"
 
+  /**
+   * todo: own macro to create a service from single image --- wait, no? global db can be provided by cloud provider, is better
+   * recommended:
+   * => jre-alpine
+   * => redis (smallest) or couchdb
+   */
   var jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
-
-  var saveImages : Boolean = false
+  var dbBaseImage : Option[String] = Some("couchdb:latest") //todo: everything else, starting db, persistent /data storage, etc.
+  var customBaseImage : Option[String] = Some("httpd:latest")
 
   /**
     * global script & configs for every service.
@@ -111,6 +121,9 @@ package object Options {
     val memory_limit : String = "256M"
     val memory_reserve : String = "64M"
     val deploy_mode : String = "replicated"
+
+    // non docker specific options
+    val network_mode : String = "default"  //default | isolated  //todo this is now only for single services (prod isolation), also make on module level and prohibit this for global config.
     val JSON : String = {
         "{" +
         "\"public\":\"" + public + "\"," +
@@ -119,7 +132,8 @@ package object Options {
         "\"cpu_limit\":\"" + cpu_limit + "\"," +
         "\"cpu_reserve\":\"" + cpu_reserve + "\"," +
         "\"memory_limit\":\"" + memory_limit + "\"," +
-        "\"memory_reserve\":\"" + memory_reserve + "\"" +
+        "\"memory_reserve\":\"" + memory_reserve + "\"," +
+        "\"network_mode\":\"" + network_mode + "\"" + // non docker specific options
         "}"
     }
   }
@@ -133,19 +147,32 @@ package object Options {
       case "no-cleanup" => cleanup = false
       case "no-cache" => nocache = true
       case "build-cleanup" => cleanBuilds = true
+      case "save-images" => saveImages = true
 
       case "platform=windows" => platform = "windows"
       case "platform=linux" => platform = "linux"
 
-      //todo check em, print warning for large JRE; also support basic JDK.
-      case "baseImage=jre" => jreBaseImage = "openjdk:8-jre"
-      case "baseImage=jre-latest" => jreBaseImage = "openjdk:jre"
-      case "baseImage=jre-small" => jreBaseImage = "openjdk:8-jre-small"
-      case "baseImage=jre-small-latest" => jreBaseImage = "openjdk:jre-small"
-      case "baseImage=jre-alpine" => jreBaseImage = "openjdk:8-jre-alpine"
-      case "baseImage=jre-alpine-latest" => jreBaseImage = "openjdk:jre-alpine"
+      case s if s.startsWith("customImage=") => customBaseImage = Some(s.substring("customImage=".length))
 
-      case "save-images" => saveImages = true
+      //todo check em, print warning for large JRE; also support basic JDK.
+      case s if s.startsWith("baseImage=") => s.substring("baseImage=".length) match{
+        case "jre" => jreBaseImage = "openjdk:8-jre"
+        case "jre-latest" => jreBaseImage = "openjdk:jre"
+        case "jre-small" => jreBaseImage = "openjdk:8-jre-small"
+        case "jre-small-latest" => jreBaseImage = "openjdk:jre-small"
+        case "jre-alpine" => jreBaseImage = "openjdk:8-jre-alpine"
+        case "jre-alpine-latest" => jreBaseImage = "openjdk:jre-alpine"
+        case _ => //todo make this customizable, if not matching one of these direct inject
+      }
+
+      case s if s.startsWith("dbImage=") => s.substring("dbImage=".length) match{
+        case "mongo" => dbBaseImage = Some("mongo:latest")
+        case "couch" => dbBaseImage = Some("couchdb:latest")
+        case "redis" => dbBaseImage = Some("redis:latest")
+        case "mysql" => dbBaseImage = Some("mysql:latest")
+        case "postgres" => dbBaseImage = Some("postgres:latest")
+        case _ => //todo make this customizable, if not matching one of these direct inject
+      }
 
       case s if s.startsWith("name=") => _swarmName = s.substring("name=".length).toLowerCase
 
@@ -192,5 +219,9 @@ package object Options {
       if(Check ! f || !(f.exists() && f.isFile))
         logger.error("You supplied a service-wide default config via the config option, but there is no file at that path. Remember to masquerade blanks in the path with '%20'.")
     }
+    if(dbBaseImage.getOrElse("").contains("mysql"))
+      logger.warning("Using mysql as database will produce large images. Also, using a relational database for Microservices is discouraged. Consider switching to a NoSQL database like couchDB, or if you rely on SQL, to PostgresSQL.")
+    if(saveImages)
+      logger.warning("You specified the save-images option. Note that saving image backups to your hard drive is extremely time consuming, you should deactivate it as soon as you don't need it anymore.")
   }
 }

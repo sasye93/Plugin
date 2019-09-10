@@ -9,13 +9,14 @@ import loci.containerize.main.Containerize
 import loci.containerize.types.TempLocation
 import sys.process._
 
-class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C) {
+class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
 
-  def getComposer(multiTierModuleName : String, dirs : List[TempLocation]) : compose = new compose(multiTierModuleName, dirs)
+  def getComposer : compose = new compose()
 
-  class compose(multiTierModuleName : String, dirs : List[TempLocation]){
+  class compose(){
     val logger : Logger = plugin.logger
     var composePath : File = _
+    val filesPath : String = "files"
 
     io.createDir(Paths.get(buildDir.getAbsolutePath, Options.composeDir)) match{
       case Some(f) => composePath = f
@@ -32,13 +33,14 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
     // - secrets (...?)
     // - --endpoint-mode for custom load balance-...?!?!?
     // - VOLUMES!
-    def buildDockerCompose() : Unit = {
+    def buildDockerCompose(multiTierModuleName : String, dirs : List[TempLocation]) : Unit = {
+      dirs.foreach(l => logger.info("locs: ++ " + l))
       val CMD =
         "version: \"3.7\"\n" +
-          dirs.foldLeft("services:\n"){ (s, d) =>
-            val cfg : ContainerConfig[C] = new ContainerConfig[C](d.entryPoint.config)(io, plugin)
-            s +
-             s"""  ${ d.getImageName }:
+          dirs.foldLeft("services:\n"){ (S, d) =>
+            val cfg : ContainerConfig = new ContainerConfig(d.entryPoint.config)(io, plugin)
+            S +
+              s"""|  ${ d.getImageName }:
               |    # configuration for ${ d.getImageName } (${ cfg.getConfigType }) 
               |    image: ${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }
               |    deploy:
@@ -65,10 +67,15 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
               (if(d.entryPoint.endPoints.exists(_.way != "connect"))
              s"    ${ d.entryPoint.endPoints.foldLeft("ports:\n")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + "      - \"" + e.port + ":" + e.port + "\"\n") }"
               else "") +
-              s"""    networks:
+              s"|      networks:" +
+              (if(cfg.getNetworkMode == "default") {
+                s"""|
               |      ${Options.swarmName}:
               |        aliases:
               |          - ${ d.getImageName }
+              |"""
+                } else "") +
+                s"""|
               |      ${multiTierModuleName}:
               |        aliases:
               |          - ${ d.getImageName }
@@ -82,7 +89,7 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
           |    attachable: true
           |    internal: false
           |    name: ${multiTierModuleName}
-          |"""
+          |""" //todo not expect global network if completely shutdown for this module
 
       /**
        * monitor_service:
@@ -115,11 +122,11 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
           " - NET_RAW\n"
         */
 
-      io.buildFile(CMD.stripMargin, Paths.get(composePath.getAbsolutePath, multiTierModuleName + ".yml"))
+      io.buildFile(CMD.stripMargin, Paths.get(composePath.getAbsolutePath, filesPath, multiTierModuleName + ".yml"))
     }
     def buildDockerSwarm(multiTierModules : List[String]) : Unit = {
-      val CMD =
-        s"""docker node ls > /dev/null 2>&1 | grep "Leader"
+      val CMD = //todo grep leader necess?
+        s"""docker node ls | grep "Leader" > /dev/null 2>&1
            |if [ $$? -ne 0 ]; then
            |  docker swarm init
            |fi
@@ -136,7 +143,7 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
            |echo "---------------------------------------------"
            |""" +
             multiTierModules.foldLeft("")((M, m) => M + {
-              s"""docker stack deploy -c $m.yml $m
+              s"""docker stack deploy -c $filesPath/$m.yml $m
                 |if [ $$? -eq 0 ]; then
                 |  echo "Successfully deployed stack '$m'."
                 |  else
@@ -195,6 +202,26 @@ class Compose[+C <: Containerize](io : IO)(buildDir : File)(implicit plugin : C)
         s"docker network rm ${Options.swarmName}"
 
       io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-stop.sh"))
+    }
+
+    def buildDockerStack(multiTierModules : List[String]): Unit = {
+      multiTierModules.foreach{ m =>
+        val CMD = //todo grep leader necess?
+          s"""docker stack ls | grep "Leader" > /dev/null 2>&1
+             |if [ $$? -ne 0 ]; then
+             |  echo "It appears that this node is not a Swarm Manager. You can only deploy a Stack to a Swarm from one of its manager nodes (use swarm-init.sh, docker swarm init or docker swarm join)."
+             |  exit 1
+             |fi
+             |docker stack deploy -c $filesPath/$m.yml $m
+             |if [ $$? -eq 0 ]; then
+             |  echo "Successfully deployed stack '$m'."
+             |  else
+             |    echo "Error while deploying stack '$m', aborting now. Please fix before retrying."
+             |    exit 1
+             |fi
+             |""".stripMargin
+        io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, s"stack-$m.sh"))
+      }
     }
 
     def runDockerSwarm() : Unit = {

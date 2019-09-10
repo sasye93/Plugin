@@ -7,10 +7,10 @@ import loci.containerize.AST.{DependencyResolver, TreeTraverser}
 import scala.tools.nsc.{Global, Phase}
 import scala.tools.nsc.plugins.PluginComponent
 
-class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends PluginComponent {
+class AnalyzeComponent(implicit val plugin : Containerize) extends PluginComponent {
 
   implicit val global : Global = plugin.global
-  implicit val parent : C = plugin
+  implicit val parent : Containerize = plugin
 
   import plugin._
   import global._
@@ -32,11 +32,13 @@ class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends Plug
 
     def apply(unit: CompilationUnit): Unit = {
 
+      val t0 = System.nanoTime()
+
       import global._
 
       //todo enthält classes path, ist aber Option => kein verlass? gibt auch setsingleoutput, evtl als fallback harcoded target path? hmm vll über flag steuern
 
-      val traverser : TreeTraverser[C] = new TreeTraverser[C]()
+      val traverser : TreeTraverser = new TreeTraverser()
 
       reporter.warning(null, global.settings.outputDirs.getSingleOutput.getOrElse(0).toString)
       reporter.warning(null, Options.targetDir.toString)
@@ -55,7 +57,6 @@ class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends Plug
       reporter.warning(null, "CU DEPEND: " + unit.depends.toString)
 
       traverser.traverse(unit.body)
-      dependencyResolver.dependencies()
       //traverser.ClassDefs.foreach(x => global.reporter.warning(null, x.classSymbol.javaClassName + x.parentType.toString))
 
       global.cleanup.getEntryPoints.foreach(x=>reporter.info(null, "§entrys: " + x, true))
@@ -89,6 +90,8 @@ class AnalyzeComponent[+C <: Containerize](implicit val plugin : C) extends Plug
             if true || rcvr.tpe <:< definitions.IntClass.tpe)
       {*/
       //}
+      val t1 = System.nanoTime()
+      logger.info(s"ap: ${(t1-t0)/1000000000}")
     }
   }
 }
