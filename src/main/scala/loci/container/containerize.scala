@@ -26,7 +26,7 @@ object ContainerizeImpl {
               }
               case _ => false
             }))
-              parents :+ Ident(TypeName(c.symbolOf[Containerized].asClass.name.toString))
+              parents :+ Ident(TypeName(c.symbolOf[ContainerizedModule].asClass.name.toString))
             else
               parents
           }

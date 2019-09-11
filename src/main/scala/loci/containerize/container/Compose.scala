@@ -40,7 +40,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
           dirs.foldLeft("services:\n"){ (S, d) =>
             val cfg : ContainerConfig = new ContainerConfig(d.entryPoint.config)(io, plugin)
             S +
-              s"""|  ${ d.getImageName }:
+              s"""  ${ d.getImageName }:
               |    # configuration for ${ d.getImageName } (${ cfg.getConfigType }) 
               |    image: ${ Options.dockerUsername }/${ Options.dockerRepository.toLowerCase }:${ d.getImageName }
               |    deploy:
@@ -67,16 +67,15 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
               (if(d.entryPoint.endPoints.exists(_.way != "connect"))
              s"    ${ d.entryPoint.endPoints.foldLeft("ports:\n")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + "      - \"" + e.port + ":" + e.port + "\"\n") }"
               else "") +
-              s"|      networks:" +
+              s"    networks:" +
               (if(cfg.getNetworkMode == "default") {
-                s"""|
+                s"""
               |      ${Options.swarmName}:
               |        aliases:
               |          - ${ d.getImageName }
               |"""
                 } else "") +
-                s"""|
-              |      ${multiTierModuleName}:
+                s"""      ${multiTierModuleName}:
               |        aliases:
               |          - ${ d.getImageName }
               |"""
@@ -143,14 +142,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
            |echo "---------------------------------------------"
            |""" +
             multiTierModules.foldLeft("")((M, m) => M + {
-              s"""docker stack deploy -c $filesPath/$m.yml $m
-                |if [ $$? -eq 0 ]; then
-                |  echo "Successfully deployed stack '$m'."
-                |  else
-                |    echo "Error while deploying stack '$m', aborting now. Please fix before retrying."
-                |    exit 1
-                |fi
-                |""".stripMargin
+              s"bash stack-$m.sh\n"
             }) +   //${Options.swarmName}
         s"""docker service create --publish 8080:8080 --mode global --constraint 'node.role == manager' --mount type=bind,source=/var/run/docker.sock,destination=/var/run/docker.sock --name monitor_service alexellis2/visualizer-arm:latest
            |  docker service inspect ${Options.swarmName}_monitor_service > /dev/null 2>&1
@@ -186,8 +178,6 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
            |echo ">> PRESS ANY KEY TO CONTINUE / CLOSE <<"
            |read -n 1 -s
            |exit 0
-           |else
-           |  exit 1
            |"""
 
       io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
@@ -207,10 +197,14 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
     def buildDockerStack(multiTierModules : List[String]): Unit = {
       multiTierModules.foreach{ m =>
         val CMD = //todo grep leader necess?
-          s"""docker stack ls | grep "Leader" > /dev/null 2>&1
+          s"""docker node ls --filter "role=manager" --format "{{.Self}}" | grep "true" > /dev/null 2>&1
              |if [ $$? -ne 0 ]; then
              |  echo "It appears that this node is not a Swarm Manager. You can only deploy a Stack to a Swarm from one of its manager nodes (use swarm-init.sh, docker swarm init or docker swarm join)."
              |  exit 1
+             |fi
+             |docker network rm $m > /dev/null 2>&1
+             |if [ $$? -eq 0 ]; then
+             |  echo "Network $m removed."
              |fi
              |docker stack deploy -c $filesPath/$m.yml $m
              |if [ $$? -eq 0 ]; then

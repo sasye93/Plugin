@@ -38,7 +38,7 @@ class TreeTraverser(implicit val plugin : Containerize) {
   def topLevelClassHasContainerizationAnnot(c : Symbol) : Boolean = {
     val parentClass = topLevelModule(c)
     parentClass != null && parentClass != NoSymbol &&
-      (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.Containerized]) || topLevelClassHasContainerizationAnnot(parentClass))
+      (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.ContainerizedModule]) || topLevelClassHasContainerizationAnnot(parentClass))
   }/**
   def getEntryPointBaseClass(c : Symbol) : Symbol = {
     val parentClass = if(c.isClass) c.safeOwner.enclClass else c.enclClass
