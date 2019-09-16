@@ -91,7 +91,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           //io.recursiveClearDirectory(plugin.containerDir)
           io.recursiveClearDirectory(plugin.homeDir)
         }
-
+        EntryPointsImpls
         val locs : collection.mutable.Map[Symbol, List[TempLocation]] = collection.mutable.HashMap[Symbol, List[TempLocation]]()
         val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
 
@@ -132,7 +132,9 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           //tempSubPath.toFile.deleteOnExit()
         }
 
-        PeerDefs.foreach(peer => dependencyResolver.getAssocEntryPointsOfPeer(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap], peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef]).foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
+        PeerDefs.foreach(peer =>
+          dependencyResolver.getAssocEntryPointsOfPeer(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap], peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef])
+            .foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
 
         val builder = new Builder(plugin.io).getBuilder(locs.toMap.map(k => (k._1.nameString, k._2)), buildPath.toFile)
         val composer = new Compose(plugin.io)(buildPath.toFile).getComposer

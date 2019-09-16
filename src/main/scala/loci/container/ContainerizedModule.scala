@@ -1,3 +1,5 @@
 package loci.container
 
-trait ContainerizedModule
+import loci.multitier
+
+@multitier trait ContainerizedModule

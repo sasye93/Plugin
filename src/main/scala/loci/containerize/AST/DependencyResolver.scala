@@ -25,15 +25,21 @@ class DependencyResolver(implicit val plugin : Containerize) {
   def startupOrderDependencies(entryPoints : TEntryPointMap) : Map[ClassSymbol, List[ClassSymbol]] = {
       entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeer.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
   }
-
   private def filterInvalid(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
   private def filterInvalidPeerRefs(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
   //todo test
   private def checkPeerRefCompleteness(entryPoints : TEntryPointMap) : TEntryPointMap = {
+
     PeerDefs.foreach{ p =>
-      if(!entryPoints.exists(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol)))
+      logger.warning("peers  -  " + p)
+      if(false && !entryPoints.exists(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol)))
         logger.error(s"No entry point found for peer class ${ p.classSymbol.fullName }, every defined Peer inside the scope of a @loci.containerize annotation must have at least one entry point starting it.")
     }
+    entryPoints
+  }
+
+  private def checkModuleEmptyness(entryPoints : TEntryPointMap) : TEntryPointMap = {
+    //todo: check that multitier containerize is not empty regard peers + use this
     entryPoints
   }
 

@@ -22,7 +22,9 @@ class TreeTraverser(implicit val plugin : Containerize) {
   import global._
 
   //todo ousource
-  private val PeerType = typeOf[loci.Peer]
+  private final val PeerType = typeOf[loci.peer]
+  private final val MultitierType = typeOf[loci.language.impl.Multitier]
+  private final val ContainerizationInterface = typeOf[loci.container.ContainerizedModule]
 
   def traverse[T >: Tree](tree : T) : Unit = {
     TreeTraverser.traverse(tree.asInstanceOf[this.global.Tree])
@@ -33,12 +35,17 @@ class TreeTraverser(implicit val plugin : Containerize) {
   implicit def pClassSymbolConvert(c : this.global.ClassSymbol) : plugin.global.ClassSymbol = c.asInstanceOf[plugin.global.ClassSymbol]
   implicit def gClassSymbolConvert(c : plugin.global.ClassSymbol) : this.global.ClassSymbol = c.asInstanceOf[this.global.ClassSymbol]
 
-  def isPeer(c : ClassDef) : Boolean = c.impl.parents.map(_.tpe).exists(_ =:= PeerType)
+  def getPeers(c : ClassDef) : List[Symbol] = c.symbol.asClass.toType.members.filter(m => m.annotations.exists(_.tpe =:= PeerType) && topLevelModule(m).isModuleOrModuleClass).toList
   def topLevelModule(c : Symbol) : Symbol = if(c.isClass) c.safeOwner.enclClass else c.enclClass
+  def hasContainerizationAnnot(c : Symbol) : Boolean = { //todo better check for annotation, but accessing its type is not possible at runtime
+    c != null && c != NoSymbol &&
+      (c.toType.baseClasses.exists(_.tpe =:= ContainerizationInterface))
+  }
+  @deprecated("1.0")
   def topLevelClassHasContainerizationAnnot(c : Symbol) : Boolean = {
     val parentClass = topLevelModule(c)
     parentClass != null && parentClass != NoSymbol &&
-      (parentClass.baseClasses.exists(_.tpe =:= typeOf[loci.container.ContainerizedModule]) || topLevelClassHasContainerizationAnnot(parentClass))
+      (hasContainerizationAnnot(parentClass) || topLevelClassHasContainerizationAnnot(parentClass))
   }/**
   def getEntryPointBaseClass(c : Symbol) : Symbol = {
     val parentClass = if(c.isClass) c.safeOwner.enclClass else c.enclClass
@@ -244,18 +251,21 @@ class TreeTraverser(implicit val plugin : Containerize) {
 
         }*/
 
-
-      case c @ ClassDef(_, className, _, impl: Template) => impl match {
+      case m : ModuleDef => logger.warning("MOD : " + m)
+      case c : ClassDef => c.impl match {
         case Template(parents, _, body) =>
 
-          if(topLevelClassHasContainerizationAnnot(c.symbol) && isPeer(c)){
-            PeerDefs += new TAbstractClassDef(
-              topLevelModule(c.symbol),
-              c.symbol.enclosingPackage.javaClassName,
-              className.asInstanceOf[plugin.global.TypeName],
-              c.symbol.asInstanceOf[plugin.global.Symbol],
-              parents.map(_.tpe.asInstanceOf[plugin.global.Type])
-            )
+          if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
+            getPeers(c).foreach{ p =>
+              logger.warning("P : " + p)
+              PeerDefs += new TAbstractClassDef(
+                topLevelModule(p),
+                p.enclosingPackage.javaClassName,
+                p.name.asInstanceOf[plugin.global.TypeName],
+                p.asInstanceOf[plugin.global.Symbol],
+                p.parentSymbols.map(_.tpe.asInstanceOf[plugin.global.Type])
+              )
+            }
           }
           //todo
 

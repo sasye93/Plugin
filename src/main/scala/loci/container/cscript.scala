@@ -2,7 +2,7 @@ package loci.container
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
-import scala.reflect.macros.whitebox
+import scala.reflect.macros.blackbox
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class cscript(path : String) extends StaticAnnotation {
@@ -13,7 +13,7 @@ object ScriptImpl {
 
   val scriptPathDenoter : String = "containerizeServiceScriptPathLocation_"
 
-  def impl(c : whitebox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
+  def impl(c : blackbox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 
     import c.universe._
 

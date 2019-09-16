@@ -71,17 +71,20 @@ class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin
     )
   }
 }
+@SerialVersionUID(123L)
 case class SimplifiedContainerEntryPoint(
                                           entryClassSymbolString : String,
                                           peerClassSymbolString : String,
                                           config : File,
                                           setupScript : File,
                                           endPoints : List[SimplifiedConnectionEndPoint]
-                                        )
+                                        ) extends Serializable
+@SerialVersionUID(124L)
 case class SimplifiedConnectionEndPoint(
                                          connectionPeerSymbolString : String,
                                          port : Integer,
                                          host : String,
                                          way : String,
-                                         version : String
-                                       )
+                                         version : String,
+                                         method : String = "unknown"
+                                       ) extends Serializable

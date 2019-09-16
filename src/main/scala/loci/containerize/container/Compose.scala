@@ -11,6 +11,25 @@ import sys.process._
 
 class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
 
+  //todo make own class
+  def getServiceMetadata(d : TempLocation) : String = {
+    //todo implement
+    val api = d.entryPoint
+    val service = d.getImageName
+//todo: service description as a manual way
+    val descr = s"""
+                   |Description for service: $service
+                   |------------
+                   | API
+                   |------------
+                   |$service provides the following to services:
+                   |@TCP  :43059     [ Peer ]
+                   |$service requires the following services:
+                   |@TCP  :32133     [ Client ]
+                   |""".stripMargin
+    Options.labelPrefix + ".api: \"" + descr + "\""
+  }
+
   def getComposer : compose = new compose()
 
   class compose(){
@@ -63,6 +82,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
               |        order: start-first
               |    labels:
               |      ${ Options.labelPrefix }.module: "$multiTierModuleName"
+              |      ${ getServiceMetadata(d) }
               |""" +
               (if(d.entryPoint.endPoints.exists(_.way != "connect"))
              s"    ${ d.entryPoint.endPoints.foldLeft("ports:\n")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + "      - \"" + e.port + ":" + e.port + "\"\n") }"

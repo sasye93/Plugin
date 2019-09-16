@@ -23,3 +23,7 @@ UDP port 4789 for overlay network traffic
 //////////
 monitoring: docker stats; images; prometheus?; logs
 https://code-maze.com/top-docker-monitoring-tools/
+
+hmm, error is thrown (blackbox/blackbox not in compiler mirror) if not reflect included in target project
+
+you could use a top level peer class, to create interface points where everyone connect!!!

@@ -1,6 +1,6 @@
 package loci.containerize.IO
 
-import java.io.{BufferedReader, BufferedWriter, File, FileReader, FileWriter, IOException}
+import java.io.{BufferedReader, BufferedWriter, File, FileInputStream, FileOutputStream, FileReader, FileWriter, IOException, ObjectInputStream, ObjectOutputStream}
 import java.nio.CharBuffer
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{CopyOption, FileAlreadyExistsException, Files, Path, Paths}
@@ -14,6 +14,43 @@ import scala.io.{BufferedSource, Source}
 //todo try catch
 class IO(implicit val logger : Logger) {
 
+  def serialize(obj : Serializable, path : Path) : Unit = {
+    var oos : ObjectOutputStream = null
+    try{
+      oos = new ObjectOutputStream(new FileOutputStream(path.toString))
+      oos.writeObject(obj)
+    }
+    catch{
+      case e @ (_ : FileAlreadyExistsException |
+                _ : UnsupportedOperationException |
+                _ : SecurityException |
+                _ : IOException) => logger.error(e.getMessage + s" (tried to serialize object ${obj}).")
+      case e : Throwable => logger.error(e.getMessage)
+    }
+    finally{
+      if(oos != null)
+        oos.close()
+    }
+  }
+  def deserialize[T](path : Path) : Option[T] = {
+    var ois : ObjectInputStream = null
+    try{
+      ois = new ObjectInputStream(new FileInputStream(path.toString))
+      return Some(ois.readObject.asInstanceOf[T])
+    }
+    catch{
+      case e @ (_ : FileAlreadyExistsException |
+                _ : UnsupportedOperationException |
+                _ : SecurityException |
+                _ : IOException) => logger.error(e.getMessage + s" (tried to serialize object from ${path}).")
+      case e : Throwable => logger.error(e.getMessage)
+    }
+    finally{
+      if(ois != null)
+        ois.close()
+    }
+    None
+  }
   def readFromFile(path : Path) : String = readFromFile(new File(path.toUri))
   def readFromFile(file : File) : String = {
     var bs : BufferedSource = null
