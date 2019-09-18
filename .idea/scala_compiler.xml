@@ -4,8 +4,9 @@
     <profile name="sbt 1" modules="Code-Plugin,plugin" />
     <profile name="sbt 2" modules="scala-loci-containerize-extension,scala-loci-containerize-extension">
       <plugins>
-        <plugin path="C:\Users\Simon S\.ivy2\cache\de.tuda.stg\dslparadise_2.12.6\jars\dslparadise_2.12.6-0.2.0.jar" />
-        <plugin path="C:\Users\Simon S\.ivy2\cache\org.scalamacros\paradise_2.12.6\jars\paradise_2.12.6-2.1.1.jar" />
+        <plugin path="$USER_HOME$/.ivy2/cache/de.tuda.stg/dslparadise_2.12.6/jars/dslparadise_2.12.6-0.2.0.jar" />
+        <plugin path="$USER_HOME$/.ivy2/cache/org.scalamacros/paradise_2.12.6/jars/paradise_2.12.6-2.1.1.jar" />
+        <plugin path="$PROJECT_DIR$/containerize.jar" />
       </plugins>
     </profile>
     <profile name="test" modules="Test">

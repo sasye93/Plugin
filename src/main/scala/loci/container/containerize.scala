@@ -1,8 +1,14 @@
 package loci.container
 
+import java.nio.file.Paths
+
+import loci.containerize.IO.{IO, Logger}
+import loci.containerize.types.{SimplifiedContainerEntryPoint, SimplifiedContainerModule}
+
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
+import scala.reflect.runtime.universe
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class containerize extends StaticAnnotation {
@@ -12,12 +18,50 @@ class containerize extends StaticAnnotation {
 object ContainerizeImpl {
 
   def impl(c : blackbox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
+
+    //todo dupl, make it somehow different
+    val tc = new Tools.TypeConverter(c)
     import c.universe._
+    import tc._
+
+    //todo dupl, make it somehow different
+    implicit def convertCtoTC(t : c.Tree) : tc.typeContext.Tree = t.asInstanceOf[tc.typeContext.Tree]
+    implicit def convertTCtoC(t : tc.typeContext.Tree) : c.Tree = t.asInstanceOf[c.Tree]
+    //todo prevent null pointer
+    //def tpeType(x : Tree) : Type = tpe(x).asInstanceOf[c.Tree].tpe.asInstanceOf[c.Type]//orElse NoType
 
     //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
-      case ModuleDef(mods, name, impl) :: Nil => impl match{
+      case (m @ ModuleDef(mods, name, impl)) :: Nil => impl match{
         case Template(parents, self, body) =>
+          val mod = tpe(m).asInstanceOf[c.Tree]
+          val peers : List[Symbol] =
+          mod.symbol.typeSignature.members.collect({
+            case m : Symbol if(m.isType && m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer])) => m
+          }).toList
+          c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.name).toString, true)
+          /**
+           * save it.
+           *  */
+          implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
+          val io = new IO()
+          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers.map(mod.symbol.fullName + "." + _.name)), Paths.get("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\Plugin\\testoutput", mod.symbol.fullName + ".mod"))
+
+          /**
+          if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
+            getPeers(c).foreach{ p =>
+              logger.warning("P : " + p)
+              PeerDefs += new TAbstractClassDef(
+                topLevelModule(p),
+                p.enclosingPackage.javaClassName,
+                p.name.asInstanceOf[plugin.global.TypeName],
+                p.asInstanceOf[plugin.global.Symbol],
+                p.parentSymbols.map(_.tpe.asInstanceOf[plugin.global.Type])
+              )
+            }
+          }
+           */
+          /**
           val p = {
             if (!parents.exists({
               case Ident(c) => c match {
@@ -30,7 +74,8 @@ object ContainerizeImpl {
             else
               parents
           }
-          c.Expr[Any](ModuleDef(mods, name, Template(p, self, body)))
+           */
+          c.Expr[Any](m)
       }
       case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.containerize must prepend a module object.")
     }

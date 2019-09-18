@@ -60,31 +60,37 @@ class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin
   }
 
   def asSimplifiedEntryPoints() : SimplifiedContainerEntryPoint = {
-    SimplifiedContainerEntryPoint(
+    new SimplifiedContainerEntryPoint(
       this.containerEntryClass.fullName('.'),
       this.containerPeerClass.fullName('.'),
       this.containerJSONConfig,
       this.containerSetupScript,
       containerEndPoints.map{
-        c => SimplifiedConnectionEndPoint(c.connectionPeer.fullName('.'), c.port, c.host, c.way, c.version)
+        c => new SimplifiedConnectionEndPoint(c.connectionPeer.fullName('.'), c.port, c.host, c.way, c.version)
       }.toList
     )
   }
 }
 @SerialVersionUID(123L)
-case class SimplifiedContainerEntryPoint(
-                                          entryClassSymbolString : String,
-                                          peerClassSymbolString : String,
-                                          config : File,
-                                          setupScript : File,
-                                          endPoints : List[SimplifiedConnectionEndPoint]
+final class SimplifiedContainerEntryPoint(
+                                          val entryClassSymbolString : String,
+                                          val peerClassSymbolString : String,
+                                          val config : File,
+                                          val setupScript : File,
+                                          val endPoints : List[SimplifiedConnectionEndPoint],
+                                          val isGateway : Boolean = false
                                         ) extends Serializable
 @SerialVersionUID(124L)
-case class SimplifiedConnectionEndPoint(
-                                         connectionPeerSymbolString : String,
-                                         port : Integer,
-                                         host : String,
-                                         way : String,
-                                         version : String,
-                                         method : String = "unknown"
+final class SimplifiedConnectionEndPoint(
+                                         val connectionPeerSymbolString : String,
+                                         val port : Integer,
+                                         val host : String,
+                                         val way : String,
+                                         val version : String,
+                                         val method : String = "unknown"
                                        ) extends Serializable
+@SerialVersionUID(125L)
+final class SimplifiedContainerModule(
+                                     val moduleName : String,
+                                     val peers : List[String]
+                                     ) extends Serializable

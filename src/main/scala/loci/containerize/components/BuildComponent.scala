@@ -8,7 +8,7 @@ import java.util.Calendar
 import loci.containerize.AST.DependencyResolver
 import loci.containerize.IO.IO
 import loci.containerize.main.Containerize
-import loci.containerize.types.TempLocation
+import loci.containerize.types.{SimplifiedContainerEntryPoint, SimplifiedContainerModule, TempLocation}
 
 import scala.tools.nsc.plugins.PluginComponent
 import scala.reflect.internal.Phase
@@ -135,6 +135,14 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         PeerDefs.foreach(peer =>
           dependencyResolver.getAssocEntryPointsOfPeer(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap], peer.asInstanceOf[dependencyResolver.plugin.TAbstractClassDef])
             .foreach(e => copy(peer.module.asInstanceOf[Symbol], e)))
+
+        new File("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\Plugin\\testoutput").listFiles((f) => f.getName.endsWith(".ep")).foreach{
+          f => logger.info("A:"+plugin.io.deserialize[SimplifiedContainerEntryPoint](f.toPath).get.isGateway.toString)
+        }
+        new File("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\Plugin\\testoutput").listFiles((f) => f.getName.endsWith(".mod")).foreach{
+          f => logger.info("B:"+plugin.io.deserialize[SimplifiedContainerModule](f.toPath).get.peers.toString)
+        }
+
 
         val builder = new Builder(plugin.io).getBuilder(locs.toMap.map(k => (k._1.nameString, k._2)), buildPath.toFile)
         val composer = new Compose(plugin.io)(buildPath.toFile).getComposer

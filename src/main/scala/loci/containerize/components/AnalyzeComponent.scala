@@ -61,7 +61,8 @@ class AnalyzeComponent(implicit val plugin : Containerize) extends PluginCompone
 
       global.cleanup.getEntryPoints.foreach(x=>reporter.info(null, "§entrys: " + x, true))
 
-      Options.containerize = plugin.PeerDefs.nonEmpty
+      reporter.warning(null, "asdd3sad")
+      Options.containerize = true /**plugin.PeerDefs.nonEmpty*/
       import java.nio.file._
 
       //check if trhow err if dir empty

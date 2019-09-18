@@ -19,13 +19,14 @@ class IO(implicit val logger : Logger) {
     try{
       oos = new ObjectOutputStream(new FileOutputStream(path.toString))
       oos.writeObject(obj)
+      oos.close()
     }
     catch{
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage + s" (tried to serialize object ${obj}).")
-      case e : Throwable => logger.error(e.getMessage)
+                _ : IOException) => logger.error("Deserialization error: " + e.getMessage + s" (tried to serialize object ${obj}).")
+      case e : Throwable => logger.error("Serialization error: " + e.getMessage)
     }
     finally{
       if(oos != null)
@@ -36,14 +37,20 @@ class IO(implicit val logger : Logger) {
     var ois : ObjectInputStream = null
     try{
       ois = new ObjectInputStream(new FileInputStream(path.toString))
-      return Some(ois.readObject.asInstanceOf[T])
+      val obj : Object = ois.readObject()
+      val o : T = obj match{ //todo does not work, class cast is not catched!
+        case _ : T => obj.asInstanceOf[T]
+        case _ => throw new IOException(s"Wrong object type when deserializing: ${obj}")
+      }
+      ois.close()
+      return Some(o)
     }
     catch{
-      case e @ (_ : FileAlreadyExistsException |
-                _ : UnsupportedOperationException |
+      case e @ (_ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error(e.getMessage + s" (tried to serialize object from ${path}).")
-      case e : Throwable => logger.error(e.getMessage)
+                _ : IOException) => logger.error("Deserialization error: " + e.getMessage + s" (tried to serialize object from ${path}).")
+      case e : Throwable => logger.error("Deserialization error: " + e.getMessage)
+      case e : java.lang.Throwable => logger.error("Deserialization error: " + e.getMessage)
     }
     finally{
       if(ois != null)
