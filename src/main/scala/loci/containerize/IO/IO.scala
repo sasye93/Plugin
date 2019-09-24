@@ -1,31 +1,31 @@
 package loci.containerize.IO
 
-import java.io.{BufferedReader, BufferedWriter, File, FileInputStream, FileOutputStream, FileReader, FileWriter, IOException, ObjectInputStream, ObjectOutputStream}
+import java.io.{BufferedReader, BufferedWriter, DataInputStream, DataOutputStream, File, FileInputStream, FileOutputStream, FileReader, FileWriter, IOException, InputStreamReader, ObjectInputStream, ObjectOutputStream, OutputStreamWriter}
 import java.nio.CharBuffer
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{CopyOption, FileAlreadyExistsException, Files, Path, Paths}
 
 import loci.containerize.{Check, Options}
 import loci.containerize.main.Containerize
-import loci.containerize.types.TempLocation
+import loci.containerize.types.{Picks, TempLocation}
 
 import scala.io.{BufferedSource, Source}
+import upickle.default._
 
 //todo try catch
 class IO(implicit val logger : Logger) {
 
-  def serialize(obj : Serializable, path : Path) : Unit = {
-    var oos : ObjectOutputStream = null
+  def serialize[T <: Picks](obj : Picks, path : Path) : Unit = {
+    var oos : OutputStreamWriter = null
     try{
-      oos = new ObjectOutputStream(new FileOutputStream(path.toString))
-      oos.writeObject(obj)
-      oos.close()
+      val json = write(obj)
+      Files.write(path, json.getBytes)
     }
     catch{
       case e @ (_ : FileAlreadyExistsException |
                 _ : UnsupportedOperationException |
                 _ : SecurityException |
-                _ : IOException) => logger.error("Deserialization error: " + e.getMessage + s" (tried to serialize object ${obj}).")
+                _ : IOException) => logger.error("Serialization error: " + e.getMessage + s" (tried to serialize object ${obj}).")
       case e : Throwable => logger.error("Serialization error: " + e.getMessage)
     }
     finally{
@@ -33,16 +33,14 @@ class IO(implicit val logger : Logger) {
         oos.close()
     }
   }
-  def deserialize[T](path : Path) : Option[T] = {
-    var ois : ObjectInputStream = null
+  def deserialize[T <: Picks](path : Path) : Option[T] = {
     try{
-      ois = new ObjectInputStream(new FileInputStream(path.toString))
-      val obj : Object = ois.readObject()
-      val o : T = obj match{ //todo does not work, class cast is not catched!
+      val f : File = path.toFile
+      val obj : Picks = upickle.default.read[Picks](f)
+      val o = obj match{
         case _ : T => obj.asInstanceOf[T]
         case _ => throw new IOException(s"Wrong object type when deserializing: ${obj}")
       }
-      ois.close()
       return Some(o)
     }
     catch{
@@ -53,20 +51,21 @@ class IO(implicit val logger : Logger) {
       case e : java.lang.Throwable => logger.error("Deserialization error: " + e.getMessage)
     }
     finally{
-      if(ois != null)
-        ois.close()
     }
     None
   }
   def readFromFile(path : Path) : String = readFromFile(new File(path.toUri))
-  def readFromFile(file : File) : String = {
+  def readFromFile(file : File, binary : Boolean = false) : String = {
+    var ds : DataInputStream = null
     var bs : BufferedSource = null
+    var result = ""
     try{
       if(!(file.exists && file.isFile))
         throw new IOException(s"Cannot open file ${file.getPath}.")
 
       bs = Source.fromFile(file)
-      return bs.getLines.foldLeft("")((s, l) => s + l)
+
+      return bs.getLines.reduce((S, l) => S + l)
     }
     catch{
       case e @ (_ : FileAlreadyExistsException |
@@ -78,12 +77,15 @@ class IO(implicit val logger : Logger) {
     finally{
       if(bs != null)
         bs.close
+      if(ds != null)
+        ds.close
     }
     ""
   }
 
-  def buildFile(content : String, path : Path) : Option[File] = {
+  def buildFile(content : String, path : Path, binary : Boolean = false) : Option[File] = {
     var bw : BufferedWriter = null
+    var os : DataOutputStream = null
     try{
       val file : File = new File(path.toUri)
 
@@ -94,8 +96,15 @@ class IO(implicit val logger : Logger) {
         file.delete()
       file.createNewFile()
 
-      bw = new BufferedWriter(new FileWriter(file))
-      bw.write(content)
+      if(binary){
+        os = new DataOutputStream(new FileOutputStream(file));
+        os.write(content.getBytes());
+      }
+      else{
+        bw = new BufferedWriter(new FileWriter(file))
+        bw.write(content)
+      }
+
       return Some(file)
     }
     catch{
@@ -108,6 +117,8 @@ class IO(implicit val logger : Logger) {
     finally{
       if(bw != null)
         bw.close()
+      if(os != null)
+        os.close()
     }
     None
   }

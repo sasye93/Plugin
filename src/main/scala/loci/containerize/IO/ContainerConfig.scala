@@ -1,7 +1,7 @@
 package loci.containerize.IO
 
 import java.io.File
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import scala.util.Try
 import scala.util.parsing.json.JSON
@@ -42,7 +42,8 @@ class ContainerConfig(json : File)(implicit io : IO, implicit private val plugin
   private def getDoubleOfKey(key : String) : Option[Double] = getValueOfKey(key) match{ case Some(s) => parseDouble(s); case _ => None }
   private def getBooleanOfKey(key : String) : Option[Boolean] = getValueOfKey(key) match{ case Some(s) => parseBoolean(s); case _ => None }
 
-  def getIsPublic : Boolean = getBooleanOfKey("public").getOrElse(Options.defaultConfig.public)
+  //Docker/Swarm-specific
+  @deprecated("use @gateway") def getIsPublic : Boolean = getBooleanOfKey("public").getOrElse(Options.defaultConfig.public)
   def getReplicas : Integer = Math.ceil(getDoubleOfKey("replicas").getOrElse(Options.defaultConfig.replicas)).toInt
   def getCPULimit : Double = getDoubleOfKey("cpu_limit").getOrElse(Options.defaultConfig.cpu_limit)
   def getCPUReserve : Double = getDoubleOfKey("cpu_reserve").getOrElse(Options.defaultConfig.cpu_reserve)
@@ -53,4 +54,26 @@ class ContainerConfig(json : File)(implicit io : IO, implicit private val plugin
   //Non-Docker specific
   def getNetworkMode : String = getStringOfKey("network_mode").getOrElse(Options.defaultConfig.network_mode)
 
+  //Images
+  def getJreBaseImage : String = getStringOfKey("jreBaseImage").getOrElse(Options.defaultConfig.jreBaseImage)
+  def getDbBaseImage : Option[String] = getStringOfKey("dbBaseImage").orElse(Options.defaultConfig.dbBaseImage)
+  def getCustomBaseImage : Option[String] = getStringOfKey("customBaseImage").orElse(Options.defaultConfig.customBaseImage)
+
+  //Script
+  def getScript(implicit logger : Logger) : Option[File] = {
+    getStringOfKey("script") match{
+      case Some(script) =>
+        var f : File = Options.resolvePath(Paths.get(script)).orNull
+        if(Check ? f && f.exists() && f.isFile) {
+          //todo make check if \r, but doesnt work, all of this doesnt work.
+          //f = io.buildFile(io.readFromFile(f).replaceAll("\\n\\r", "\\n").replaceAll("\\r", "\\n"), f.toPath, true).getOrElse(f)
+          //logger.warning("The script you provided apparently does not have UNIX endings, which could prevent proper execution. It has been transformed automatically and might run properly, but you should manually check your script not to use \"\\r\" endings: " + f.getPath)
+          Some(f)
+        } else {
+          logger.error(s"Cannot find annotated JSON config file for entry point: $script")
+          None
+        }
+      case None => None
+    }
+  }
 }

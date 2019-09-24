@@ -3,7 +3,8 @@ package loci.container
 import java.nio.file.Paths
 
 import loci.containerize.IO.{IO, Logger}
-import loci.containerize.types.{SimplifiedContainerEntryPoint, SimplifiedContainerModule}
+import loci.containerize.Options
+import loci.containerize.types.{SimplifiedContainerEntryPoint, SimplifiedContainerModule, SimplifiedPeerDefinition}
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
@@ -32,20 +33,26 @@ object ContainerizeImpl {
 
     //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
-      case (m @ ModuleDef(mods, name, impl)) :: Nil => impl match{
+      case (m : ModuleDef) :: Nil => m.impl match{
         case Template(parents, self, body) =>
+          c.info(null, "this is it : " + showRaw(body), true)
           val mod = tpe(m).asInstanceOf[c.Tree]
-          val peers : List[Symbol] =
+          val peers : List[SimplifiedPeerDefinition] =
           mod.symbol.typeSignature.members.collect({
-            case m : Symbol if(m.isType && m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer])) => m
+            case m : Symbol if(m.isType &&
+                ( m.annotations.exists(_.tree.tpe =:= c.typeOf[loci.peer]) || //If @peer has not yet been processed.
+                  m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer]))  //If @peer has already been processed.
+              ) => SimplifiedPeerDefinition(tpe(mod).symbol.fullName + "." + m.name.toString)
           }).toList
-          c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.name).toString, true)
+          c.info(c.enclosingPosition, "members: " + mod.tpe.members.map(x => (x.name, x.typeSignature)).toString, true)
+          c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.className).toString, true)
           /**
            * save it.
            *  */
           implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
           val io = new IO()
-          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers.map(mod.symbol.fullName + "." + _.name)), Paths.get("C:\\Users\\Simon S\\Dropbox\\Masterarbeit\\Code\\Plugin\\testoutput", mod.symbol.fullName + ".mod"))
+          io.createDir(Options.tempDir)
+          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers), Options.tempDir.resolve(mod.symbol.fullName + ".mod"))
 
           /**
           if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
@@ -77,7 +84,7 @@ object ContainerizeImpl {
            */
           c.Expr[Any](m)
       }
-      case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.containerize must prepend a module object.")
+      case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.containerize must prepend a module object (object or case object).")
     }
 
   }

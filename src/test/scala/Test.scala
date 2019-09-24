@@ -1,3 +1,6 @@
+/**
+//warning: enabling test will run in final plugin as well, so make this not interfering or leave out.
+
 import org.scalatest.FunSuite
 
 import loci._
@@ -55,23 +58,23 @@ import loci.container._
 @multitier @containerize object MultitierApi extends ServerImpl with ClientImpl
 
 @service
-object Server extends App {
-  loci.multitier start new Instance[MultitierApi.Server](
+object Server2 extends App {
+  multitier start new Instance[MultitierApi.Server](
     listen[MultitierApi.Client] { TCP(43059) }
   )
 }
 @service
-object Client extends App {
-  loci.multitier start new Instance[MultitierApi.Client](
+object Client2 extends App {
+  multitier start new Instance[MultitierApi.Client](
     connect[MultitierApi.Server] { TCP("localhost", 1) } and
       connect[MultitierApi.Client] { TCP("localhost", 2) } and
       connect[MultitierApi.Peer] { TCP(3, "localhost").firstConnection }
   )
 }
-@service object Peer extends App {
+@gateway object Peer2 extends App {
   val ac = 1
   def test = "J"
-  loci.multitier start new Instance[MultitierApi.Peer](
+  multitier start new Instance[MultitierApi.Peer](
     listen[MultitierApi.Peer] { TCP(431) } and
     connect[MultitierApi.Peer] { TCP("localhost", 123) }
   ){
@@ -86,3 +89,4 @@ class Test extends FunSuite {
     assert(1 == 1)
   }
 }
+*/

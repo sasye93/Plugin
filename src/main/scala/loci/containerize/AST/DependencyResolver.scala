@@ -3,6 +3,7 @@ package loci.containerize.AST
 import java.nio.file.{Path, Paths}
 
 import loci.containerize.main.Containerize
+import loci.containerize.types.SimplifiedContainerEntryPoint
 
 import scala.collection.immutable.HashMap
 import scala.tools.nsc.Global
@@ -12,30 +13,28 @@ class DependencyResolver(implicit val plugin : Containerize) {
   import plugin._
   import global._
 
-  def getAssocEntryPointsOfPeer(entryPoints : TEntryPointMap, p : TAbstractClassDef) : List[TEntryPointDef] = {
-    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol.asInstanceOf[plugin.global.Symbol])).toList.map(_._2)
+  def getAssocEntryPointsOfPeer(entryPoints : TEntryList, p : TPeerDef) : TEntryList = {
+    entryPoints.filter(e => e.peerClassSymbolString == p.className)
   }
   def getAssocEntryPointsOfClassSymbol(entryPoints : TEntryPointMap, c : ClassSymbol) : List[ClassSymbol] = {
-    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.containerEntryClass.asInstanceOf[plugin.global.ClassSymbol])
+    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.peerClassSymbolString.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.peerClassSymbolString.asInstanceOf[plugin.global.ClassSymbol])
   }
   /**
     * get startup order
     */
-    @deprecated("")
+    @deprecated("1.0") // not updated
   def startupOrderDependencies(entryPoints : TEntryPointMap) : Map[ClassSymbol, List[ClassSymbol]] = {
-      entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.containerEndPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeer.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
+      entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.endPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeerSymbolString.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
   }
-  private def filterInvalid(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => e._2.entryClassDefined && e._2.peerClassDefined)
-  private def filterInvalidPeerRefs(entryPoints : TEntryPointMap) : TEntryPointMap = entryPoints.filter(e => PeerDefs.exists(p => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol) ))
+  private def filterInvalid(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => !(e.peerClassSymbolString.isEmpty || e.entryClassSymbolString.isEmpty)), peerDefs)
+  private def filterInvalidPeerRefs(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => peerDefs.exists(p => e.peerClassSymbolString == p.className)), peerDefs)
   //todo test
-  private def checkPeerRefCompleteness(entryPoints : TEntryPointMap) : TEntryPointMap = {
-
-    PeerDefs.foreach{ p =>
-      logger.warning("peers  -  " + p)
-      if(false && !entryPoints.exists(e => toolbox.weakSymbolCompare(e._2.containerPeerClass.asInstanceOf[plugin.global.Symbol], p.classSymbol)))
-        logger.error(s"No entry point found for peer class ${ p.classSymbol.fullName }, every defined Peer inside the scope of a @loci.containerize annotation must have at least one entry point starting it.")
-    }
-    entryPoints
+  //this is not used atm (check if every peer in module has entry point), because it is probably not desirable.
+  private def checkPeerRefCompleteness(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = {
+    (
+      entryPoints,
+      peerDefs
+    )
   }
 
   private def checkModuleEmptyness(entryPoints : TEntryPointMap) : TEntryPointMap = {
@@ -49,9 +48,9 @@ class DependencyResolver(implicit val plugin : Containerize) {
   }
   def classJRELibs() : List[String] = List("\"$JAVA_HOME/lib\"", "\"$JAVA_HOME/lib/ext\"")
 
-  def dependencies(entryPoints : TEntryPointMap) : TEntryPointMap = {
+  def dependencies(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = {
 
-    (filterInvalid _ andThen filterInvalidPeerRefs andThen checkPeerRefCompleteness)(entryPoints)
+    ((filterInvalid _).tupled andThen (filterInvalidPeerRefs _).tupled andThen (checkPeerRefCompleteness _).tupled)(entryPoints, peerDefs)
 
     /**
     EntryPoints = PeerDefs.map{

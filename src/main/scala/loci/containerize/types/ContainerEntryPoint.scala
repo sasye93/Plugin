@@ -1,23 +1,41 @@
 package loci.containerize.types
 
-import java.nio.file.Path
+import java.nio.file.{Path, Paths}
 import java.io.File
 
 import loci.containerize.Options
 import loci.containerize.Check
+import loci.containerize.IO.{ContainerConfig, Logger}
 import loci.containerize.main.Containerize
 
 import scala.annotation.meta.{getter, setter}
 import scala.collection.mutable
-
 import scala.tools.nsc.Global
 
 //@compileTimeOnly("this class is for internal use only.")
-class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin : Containerize) {
 
+class ContainerEntryPoint(from : SimplifiedContainerEntryPoint)(implicit val plugin : Containerize) extends SimplifiedContainerEntryPoint(
+  from.entryClassSymbolString, from.peerClassSymbolString, from.configPath, from.endPoints, from.isGateway
+) {
   import plugin._
   import plugin.global._
 
+  val configFile : Option[File] = configPath match{
+    case Some(cfg) =>
+      val f : File = Options.resolvePath(Paths.get(cfg)).orNull
+      if(Check ? f && f.exists() && f.isFile)
+        Some(f)
+      else {
+        logger.error(s"Cannot find annotated JSON config file for entry point: $cfg")
+        None
+      }
+    case None => None
+  }
+  val config : ContainerConfig = new ContainerConfig(configFile.orNull)(io, plugin)
+
+  @deprecated("1.0") val setupScript = null
+
+  /**
   var containerPeerClass : Symbol = if(init != null) init.containerPeerClass.asInstanceOf[global.Symbol] else NoSymbol
   var containerEntryClass : Symbol = if(init != null) init.containerEntryClass.asInstanceOf[global.Symbol] else NoSymbol
 
@@ -34,8 +52,6 @@ class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin
 
   def addEndPoint(connectionEndPoint: ConnectionEndPoint) : mutable.MutableList[ConnectionEndPoint] = containerEndPoints += connectionEndPoint
   def getDefaultEndpoint(connectionPeer : Symbol) : ConnectionEndPoint = ConnectionEndPoint(connectionPeer)
-
-  def getLocDenominator : String = plugin.toolbox.getNormalizedNameDenominator(containerPeerClass) + "/" + plugin.toolbox.getNormalizedNameDenominator(containerEntryClass)
 
   def entryClassDefined() : Boolean = containerEntryClass != NoSymbol
   def peerClassDefined() : Boolean = containerPeerClass != NoSymbol
@@ -63,34 +79,63 @@ class ContainerEntryPoint(init : ContainerEntryPoint = null)(implicit val plugin
     new SimplifiedContainerEntryPoint(
       this.containerEntryClass.fullName('.'),
       this.containerPeerClass.fullName('.'),
-      this.containerJSONConfig,
-      this.containerSetupScript,
+      Some(this.containerJSONConfig.getPath),
       containerEndPoints.map{
         c => new SimplifiedConnectionEndPoint(c.connectionPeer.fullName('.'), c.port, c.host, c.way, c.version)
       }.toList
     )
   }
+  */
 }
-@SerialVersionUID(123L)
-final class SimplifiedContainerEntryPoint(
+import upickle.default.{ReadWriter => RW, _}
+
+sealed trait Picks
+object Picks {
+  implicit val rw: RW[Picks] = RW.merge(
+    SimplifiedContainerEntryPoint.rw,
+    SimplifiedConnectionEndPoint.rw,
+    SimplifiedContainerModule.rw,
+    SimplifiedPeerDefinition.rw)
+}
+
+case class SimplifiedContainerEntryPoint(
                                           val entryClassSymbolString : String,
                                           val peerClassSymbolString : String,
-                                          val config : File,
-                                          val setupScript : File,
-                                          val endPoints : List[SimplifiedConnectionEndPoint],
+                                          val configPath : Option[String],
+                                          val endPoints : List[SimplifiedConnectionEndPoint] = List[SimplifiedConnectionEndPoint](),
                                           val isGateway : Boolean = false
-                                        ) extends Serializable
-@SerialVersionUID(124L)
-final class SimplifiedConnectionEndPoint(
+                                        ) extends Picks{
+
+  def getLocDenominator : String = Paths.get(loci.container.Tools.getIpString(peerClassSymbolString).split("_").last, loci.container.Tools.getIpString(entryClassSymbolString)).toString
+}
+object SimplifiedContainerEntryPoint {
+  implicit val rw: RW[SimplifiedContainerEntryPoint] = macroRW
+}
+case class SimplifiedConnectionEndPoint(
                                          val connectionPeerSymbolString : String,
-                                         val port : Integer,
+                                         val port : Int,
                                          val host : String,
                                          val way : String,
                                          val version : String,
                                          val method : String = "unknown"
-                                       ) extends Serializable
-@SerialVersionUID(125L)
-final class SimplifiedContainerModule(
+                                       ) extends Picks
+object SimplifiedConnectionEndPoint {
+  implicit val rw: RW[SimplifiedConnectionEndPoint] = macroRW
+}
+case class SimplifiedContainerModule(
                                      val moduleName : String,
-                                     val peers : List[String]
-                                     ) extends Serializable
+                                     val peers : List[SimplifiedPeerDefinition]
+                                     ) extends Picks{
+
+  def getLocDenominator : String = loci.container.Tools.getIpString(moduleName)
+}
+object SimplifiedContainerModule {
+  implicit val rw: RW[SimplifiedContainerModule] = macroRW
+}
+
+case class SimplifiedPeerDefinition(
+                                      val className : String,
+                                    ) extends Picks
+object SimplifiedPeerDefinition {
+  implicit val rw: RW[SimplifiedPeerDefinition] = macroRW
+}

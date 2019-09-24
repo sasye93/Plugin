@@ -27,3 +27,11 @@ https://code-maze.com/top-docker-monitoring-tools/
 hmm, error is thrown (blackbox/blackbox not in compiler mirror) if not reflect included in target project
 
 you could use a top level peer class, to create interface points where everyone connect!!!
+
+unable to prepare context: unable to evaluate symlinks in Dockerfile path: Das System kann den angegebenen Pfad nicht finden. (126): file path too long!
+service names max 63 chars, so no extremely long package paths, name is module fullname + ep full name, so. + second package cutted, so ep name must be unique without package identifier.
+
+script in container must have unix ending !
+
+err inspect:
+docker service ps --no-trunc {serviceName}

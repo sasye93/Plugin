@@ -7,6 +7,7 @@ import loci.containerize.AST.{DependencyResolver, TreeTraverser}
 import scala.tools.nsc.{Global, Phase}
 import scala.tools.nsc.plugins.PluginComponent
 
+@deprecated("use macros.")
 class AnalyzeComponent(implicit val plugin : Containerize) extends PluginComponent {
 
   implicit val global : Global = plugin.global

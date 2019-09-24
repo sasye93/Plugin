@@ -16,7 +16,7 @@ import scala.tools.nsc.{Global, util}
 import loci.containerize.Options
 import loci.containerize.components._
 import loci.containerize.IO.IO
-import loci.containerize.types.ContainerEntryPoint
+import loci.containerize.types.{ContainerEntryPoint, SimplifiedContainerEntryPoint, SimplifiedContainerModule, SimplifiedPeerDefinition}
 
 import scala.collection.mutable
 import scala.collection.immutable
@@ -42,7 +42,7 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val description : String = Options.pluginDescription
 
   val components : List[PluginComponent] = List[PluginComponent](
-    new AnalyzeComponent(),
+    //new AnalyzeComponent(),
     new BuildComponent()
   )
 
@@ -54,19 +54,28 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val dependencyResolver : DependencyResolver = new DependencyResolver()
 
   //todo algos always operate on here, mutating. change!
-  private[containerize] var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
-  private[containerize] var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
+  @deprecated("1") private[containerize] var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
+  @deprecated("1") private[containerize] var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
 
-  type TAbstractClassDef = AbstractClassDef[Type, TypeName, Symbol]
-  type TEntryPointDef = ContainerEntryPoint
-  type TEntryPointMap = mutable.HashMap[ClassSymbol, TEntryPointDef]
+  @deprecated("1") type TAbstractClassDef = AbstractClassDef[Type, TypeName, Symbol]
+  @deprecated("1") type TEntryPointDef = ContainerEntryPoint
+  @deprecated("1") type TEntryPointMap = mutable.HashMap[ClassSymbol, TEntryPointDef]
+
+  type TModuleDef = SimplifiedContainerModule
+  type TSimpleEntryDef = SimplifiedContainerEntryPoint
+  type TEntryDef = ContainerEntryPoint
+  type TPeerDef = SimplifiedPeerDefinition
+  type TSimpleEntryList = List[TSimpleEntryDef]
+  type TEntryList = List[TEntryDef]
+  type TModuleList = List[TModuleDef]
+  type TPeerList = List[TPeerDef]
 
   class ccSymbol(s : Symbol){
   }
 
   //todo classfiles as ref?
   //todo replace null with option
-  case class AbstractClassDef[T <: global.Type, TN <: global.TypeName, S <: global.Symbol](
+  @deprecated("1") case class AbstractClassDef[T <: global.Type, TN <: global.TypeName, S <: global.Symbol](
                                                                                             module : S,
                                                                                             packageName : String,
                                                                                             className : TN,
@@ -98,11 +107,10 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   }
   override val optionsHelp = Some(Options.pluginHelp)
 
-  object toolbox{
+  @deprecated("use Options.toolbox instead") object toolbox{
     def weakSymbolCompare(symbol1 : Symbol, symbol2 : Symbol) : Boolean = symbol1.fullName == symbol2.fullName
     def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
     def toUnixString(p : Path): String = p.toString.replace("\\", "/")
-    def getNormalizedFullNameDenominator(s : Symbol) : String = loci.container.Tools.getIpString(s.fullNameString)
-    def getNormalizedNameDenominator(s : Symbol) : String = loci.container.Tools.getIpString(s.nameString)
+    def getNameDenominator(s : String) : String = loci.container.Tools.getIpString(s)
   }
 }

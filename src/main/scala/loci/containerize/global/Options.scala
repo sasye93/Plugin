@@ -2,12 +2,20 @@ package loci.containerize
 
 import java.io.File
 import java.nio.file.{Path, Paths}
-
+import java.text.SimpleDateFormat
+import java.util.Calendar
 
 import loci.containerize.IO.Logger
 import loci.containerize.Check
 
 package object Options {
+
+  object toolbox{
+    def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
+    def toUnixString(p : Path): String = p.toString.replace("\\", "/")
+    def getNameDenominator(s : String) : String = loci.container.Tools.getIpString(s)
+  }
+
   sealed trait Stage{
     def id : Int
     def >(s : Stage): Boolean = this.id > s.id
@@ -22,15 +30,20 @@ package object Options {
   val pluginHelp = "todo" //todo options descr
   val labelPrefix = "com.loci.containerize"
 
-  case object file extends Stage{ def id = 1 }
-  case object image extends Stage{ def id = 2 }
-  case object publish extends Stage{ def id = 3 }
-  case object compose extends Stage{ def id = 4 }
+  case object file extends Stage{ final def id = 1 }
+  case object image extends Stage{ final def id = 2 }
+  case object publish extends Stage{ final def id = 3 }
+  case object compose extends Stage{ final def id = 4 }
+
+  val published = false //todo this is stub var now to get if images are published, make this different, based on this in compose the respective image is selected, print warning also bec if false, you cant use this on multiple nodes in a swarm (no access)
 
   var containerize : Boolean = false
 
   val configPathDenoter : String = loci.container.ConfigImpl.configPathDenoter
   val scriptPathDenoter : String = loci.container.ScriptImpl.scriptPathDenoter
+
+  //todo find better path
+  val tempDir : Path = Paths.get(System.getProperty("java.io.tmpdir"), "loci_containerize_temp")
 
   val containerHome : String = "/app"
   val containerVolumeStore : String = s"$containerHome/data"
@@ -54,8 +67,8 @@ package object Options {
   /**
     * options and their default values.
     */
-  private var _swarmName : String = if(Check ? getClass.getPackage) getClass.getPackage.getImplementationTitle else "Containerized_ScalaLoci_Project"
-  def swarmName : String = _swarmName
+  private var _swarmName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
+  def swarmName : String = toolbox.getNameDenominator(_swarmName)
 
   var jar : Boolean = true
   var stage : Stage = compose
@@ -89,13 +102,14 @@ package object Options {
 
   /**
    * todo: own macro to create a service from single image --- wait, no? global db can be provided by cloud provider, is better
+   * todo: keep this global version? is referenced auf jeden fall in config below
    * recommended:
    * => jre-alpine
    * => redis (smallest) or couchdb
    */
   var jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
   var dbBaseImage : Option[String] = Some("couchdb:latest") //todo: everything else, starting db, persistent /data storage, etc.
-  var customBaseImage : Option[String] = Some("httpd:latest")
+  var customBaseImage : Option[String] = Some("httpd:latest") //todo set db and custom to none as default
 
   /**
     * global script & configs for every service.
@@ -114,7 +128,7 @@ package object Options {
   }
 
   object defaultConfig{
-    val public : Boolean = true
+    @deprecated("1.0", "Disabled.") val public : Boolean = true
     val replicas : Double = 1
     val cpu_limit : Double = 0.2
     val cpu_reserve : Double = 0.1
@@ -124,6 +138,14 @@ package object Options {
 
     // non docker specific options
     val network_mode : String = "default"  //default | isolated  //todo this is now only for single services (prod isolation), also make on module level and prohibit this for global config.
+
+    // non docker specific without default
+    val script : Option[String] = None
+
+    var jreBaseImage : String = Options.jreBaseImage //"openjdk:8-jre-alpine"
+    var dbBaseImage : Option[String] = Options.dbBaseImage //todo: everything else, starting db, persistent /data storage, etc.
+    var customBaseImage : Option[String] = Options.customBaseImage
+
     val JSON : String = {
         "{" +
         "\"public\":\"" + public + "\"," +
@@ -133,7 +155,8 @@ package object Options {
         "\"cpu_reserve\":\"" + cpu_reserve + "\"," +
         "\"memory_limit\":\"" + memory_limit + "\"," +
         "\"memory_reserve\":\"" + memory_reserve + "\"," +
-        "\"network_mode\":\"" + network_mode + "\"" + // non docker specific options
+        "\"network_mode\":\"" + network_mode + "\"," + // non docker specific options
+        "\"jreBaseImage\":\"" + jreBaseImage + "\"" +
         "}"
     }
   }

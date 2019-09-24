@@ -14,6 +14,7 @@ import scala.tools.nsc.Global
 import scala.language.implicitConversions
 import scala.reflect.io.AbstractFile
 
+@deprecated("use macros.")
 class TreeTraverser(implicit val plugin : Containerize) {
 
   implicit val global : Global = plugin.global
@@ -28,7 +29,7 @@ class TreeTraverser(implicit val plugin : Containerize) {
 
   def traverse[T >: Tree](tree : T) : Unit = {
     TreeTraverser.traverse(tree.asInstanceOf[this.global.Tree])
-    EntryPointsImpls = dependencyResolver.dependencies(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap]).asInstanceOf[TEntryPointMap]
+    //EntryPointsImpls = dependencyResolver.dependencies(EntryPointsImpls.asInstanceOf[dependencyResolver.plugin.TEntryPointMap]).asInstanceOf[TEntryPointMap]
   }
   implicit def pSymbolConvert(c : this.global.Symbol) : plugin.global.Symbol = c.asInstanceOf[plugin.global.Symbol]
   implicit def gSymbolConvert(c : plugin.global.Symbol) : this.global.Symbol = c.asInstanceOf[this.global.Symbol]
@@ -69,7 +70,8 @@ class TreeTraverser(implicit val plugin : Containerize) {
   }
   def getOrUpdateEntryPointsImpl(entryPoints : TEntryPointMap, className : ClassSymbol): TEntryPointDef = {
     //todo better
-    entryPoints.getOrElseUpdate(className, new ContainerEntryPoint()(plugin))
+    //entryPoints.getOrElseUpdate(className, new ContainerEntryPoint()(plugin))
+    null
   }
   def updateEntryPointsImpl(entryPoints : TEntryPointMap, className : ClassSymbol, cep : TEntryPointDef) : Unit = {
     //todo better
@@ -305,8 +307,8 @@ class TreeTraverser(implicit val plugin : Containerize) {
               })
             trees.foreach({
               case s: Select =>
-                cep.containerPeerClass = s.symbol.asInstanceOf[cep.plugin.global.Symbol]
-                cep.containerEntryClass = c.symbol.asInstanceOf[cep.plugin.global.Symbol]
+                //cep.peerClassSymbolString = s.symbol.fullNameString
+                //cep.entryClassSymbolString = c.symbol.fullNameString
 
               /** collecting annotations for entry class */
               body.foreach(_.foreach({
@@ -314,8 +316,8 @@ class TreeTraverser(implicit val plugin : Containerize) {
                   val annot: String = s.substring(s.indexOf("_") +1)
                   if(!annot.isEmpty)
                     s match{
-                    case cfg if cfg.startsWith(Options.configPathDenoter) => cep.setConfig(Paths.get(annot))  //todo support relative paths
-                    case scr if scr.startsWith(Options.scriptPathDenoter) => cep.setScript(Paths.get(annot))  //todo support relative paths or something like that
+                    case cfg if cfg.startsWith(Options.configPathDenoter) => //cep.setConfig(Paths.get(annot))  //todo support relative paths
+                    case scr if scr.startsWith(Options.scriptPathDenoter) => //cep.setScript(Paths.get(annot))  //todo support relative paths or something like that
                     case _ =>
                   }
                 case _ =>
@@ -352,7 +354,7 @@ class TreeTraverser(implicit val plugin : Containerize) {
                           }
                           case _ => reporter.error(null, "XXX"); NoSymbol
                         }
-                      cep.addEndPoint(cep.ConnectionEndPoint(connectionPeer.asInstanceOf[cep.plugin.global.TypeSymbol], port, host, conFun.symbol.simpleName.toString))
+                      //cep.addEndPoint(cep.ConnectionEndPoint(connectionPeer.asInstanceOf[cep.plugin.global.TypeSymbol], port, host, conFun.symbol.simpleName.toString))
                     case _ =>
                   }
                 case _ =>

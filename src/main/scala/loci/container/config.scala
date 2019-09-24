@@ -5,13 +5,13 @@ import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
-class cconfig(path : String) extends StaticAnnotation {
+class config(path : String) extends StaticAnnotation {
   def macroTransform(annottees: Any*) : Any = macro loci.container.ConfigImpl.impl
 }
 
 object ConfigImpl {
 
-  val configPathDenoter : String = "containerizeServiceConfigPathLocation_"
+  final val configPathDenoter : String = "containerizeGlobalServiceConfigPathLocation_"
 
   def impl(c : blackbox.Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
 
@@ -22,8 +22,8 @@ object ConfigImpl {
       case ModuleDef(mods, name, impl) :: Nil =>
 
           val t = (c.prefix.tree match {
-            case q"new cconfig(path=$s)" if s.toString.matches("^\".*\"$") => s
-            case q"new cconfig($s)" if s.toString.matches("^\".*\"$") => s
+            case q"new config(path=$s)" if s.toString.matches("^\".*\"$") => s
+            case q"new config($s)" if s.toString.matches("^\".*\"$") => s
             case _ => c.abort(c.enclosingPosition, "Invalid @cconfig annotation style. Use '@cconfig(PATH), e.g. @cconfig(\"/configs/mycfg.json\").")
           }).toString.replaceAll("\"", "")
 

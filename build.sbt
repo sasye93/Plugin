@@ -2,7 +2,7 @@ name := "scala-loci-containerize-extension"
 
 version := "0.1"
 
-scalaVersion := "2.12.6"
+scalaVersion := "2.12.8"
 
 resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
@@ -17,8 +17,11 @@ libraryDependencies ++= Seq(
   "de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.3.0",
   "de.tuda.stg" %% "scala-loci-lang-transmitter-rescala" % "0.3.0")
 
+assemblyMergeStrategy in assembly := {
+  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
+  case x => MergeStrategy.first
+}
 
-addCompilerPlugin("de.tuda.stg" % "dslparadise" % "0.2.0" cross CrossVersion.patch)
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
 
 enablePlugins(JavaAppPackaging)

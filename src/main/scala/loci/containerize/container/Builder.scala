@@ -118,6 +118,8 @@ class Builder(io : IO)(implicit plugin : Containerize){
 
       dirs.flatMap(_._2).foreach(d => {
         val relativeCP = getRelativeContainerPath(d).toString
+        val ports = d.entryPoint.endPoints.filter(_.way != "connect").map(_.port).toSet
+        val script = d.entryPoint.config.getScript
 
         val CMD = //todo hardcoded //todo vers macro //todo descr macro
           s"""FROM ${ Options.libraryBaseImageTag }
@@ -126,16 +128,16 @@ class Builder(io : IO)(implicit plugin : Containerize){
           |WORKDIR ${ Options.containerHome }
           |COPY ./run.$plExt ./*.jar ./
           |""" +
-            (if(d.entryPoint.endPoints.exists(_.way != "connect")) d.entryPoint.endPoints.foldLeft("EXPOSE")((s, e) => if(e.way == "connect") s else s + " " + e.port) else "") + "\n" +
-            Check ?=> (d.entryPoint.setupScript,  //todo can we just run it without copy? layers!
-              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}preRunSpecific.$plExt \n" +
-                s"RUN ${Options.containerHome}preRunSpecific.$plExt \n", "") +
+            (if(d.entryPoint.isGateway && ports.nonEmpty) ports.foldLeft("EXPOSE")((S, port) => S + " " + port) else "") + "\n" +
+            Check ?=> (script.orNull,  //todo can we just run it without copy? layers!
+              s"COPY ./preRunSpecific.$plExt ${Options.containerHome}/preRunSpecific.$plExt \n" +
+                s"RUN ${Options.containerHome}/preRunSpecific.$plExt \n", "") +
             s"ENTRYPOINT ./run.$plExt \n"
             //"COPY [\"" + libraryPath.toString.replace("\\", "/") + "\",\"" + Options.unixLibraryPathPrefix + "\"]\r\n" +
 
-
-        if(Check ? d.entryPoint.setupScript)
-          Files.copy(d.entryPoint.setupScript.toPath, Paths.get(d.getTempPathString, s"preRunSpecific.$plExt"), REPLACE_EXISTING)
+         //todo ok?
+        if(script.isDefined)
+          Files.copy(script.get.toPath, Paths.get(d.getTempPathString, s"preRunSpecific.$plExt"), REPLACE_EXISTING)
 
         io.buildFile(CMD.stripMargin, Paths.get(d.getTempPathString, "Dockerfile"))
 
@@ -171,7 +173,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
       Options.getSetupScript match{
         case Some(f) => Files.copy(f.toPath, Paths.get(libraryPath.toString, s"preRun.$plExt"), REPLACE_EXISTING)
         case None =>
-    }
+      }
       io.buildFile(CMD.stripMargin, Paths.get(libraryPath.toString, "Dockerfile"))
     }
     //todo cache etc., takes long
@@ -213,11 +215,13 @@ class Builder(io : IO)(implicit plugin : Containerize){
         val moduleNet = new Network(plugin.io)(module, buildDir.toPath)
 
         dirs.getOrElse(module, List()).foreach{ loc =>
+
 //todo network switch for global net on off
           val CMDStart = //todo -v flag ok? removes volume associated //todo -a flag?
             s"""docker rm --volumes -f ${ loc.getImageName }
                |docker volume create ${ loc.getImageName }
-               |docker run -id ${ loc.entryPoint.endPoints.foldLeft("")((s, e) => if(e.way == "connect" && Check ? e.port) s else s + s"--publish ${ e.port }:${ e.port }") } --name ${ loc.getImageName } --network=${ globalNet.getName } --network=${ moduleNet.getName } --mount source=${ loc.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ loc.getImageName }
+               |docker run -id ${ if(loc.entryPoint.isGateway) loc.entryPoint.endPoints.filter(_.way != "connect").map(_.port).toSet.foldLeft("")((S, port) => S + s"--publish ${ port }:${ port } ") else "" } --name ${ loc.getImageName } --network=${ globalNet.getName } --mount source=${ loc.getImageName },target=${ Options.containerVolumeStore } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ loc.getImageName }
+               |docker network connect --alias ${ loc.getImageName } ${ moduleNet.getName } ${ loc.getImageName }
                |docker container inspect -f \"Container '""".stripMargin + loc.getImageName + "' connected to " + globalNet.getName + " and " + moduleNet.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + loc.getImageName + "\n"
 
           val CMDStop =
