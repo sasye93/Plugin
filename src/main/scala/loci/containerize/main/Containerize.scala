@@ -16,7 +16,7 @@ import scala.tools.nsc.{Global, util}
 import loci.containerize.Options
 import loci.containerize.components._
 import loci.containerize.IO.IO
-import loci.containerize.types.{ContainerEntryPoint, SimplifiedContainerEntryPoint, SimplifiedContainerModule, SimplifiedPeerDefinition}
+import loci.containerize.types._
 
 import scala.collection.mutable
 import scala.collection.immutable
@@ -61,12 +61,14 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   @deprecated("1") type TEntryPointDef = ContainerEntryPoint
   @deprecated("1") type TEntryPointMap = mutable.HashMap[ClassSymbol, TEntryPointDef]
 
-  type TModuleDef = SimplifiedContainerModule
+  type TSimpleModuleDef = SimplifiedContainerModule
+  type TModuleDef = ContainerModule
   type TSimpleEntryDef = SimplifiedContainerEntryPoint
   type TEntryDef = ContainerEntryPoint
   type TPeerDef = SimplifiedPeerDefinition
   type TSimpleEntryList = List[TSimpleEntryDef]
   type TEntryList = List[TEntryDef]
+  type TSimpleModuleList = List[TSimpleModuleDef]
   type TModuleList = List[TModuleDef]
   type TPeerList = List[TPeerDef]
 

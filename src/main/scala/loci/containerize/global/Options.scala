@@ -46,7 +46,7 @@ package object Options {
   val tempDir : Path = Paths.get(System.getProperty("java.io.tmpdir"), "loci_containerize_temp")
 
   val containerHome : String = "/app"
-  val containerVolumeStore : String = s"$containerHome/data"
+  @deprecated("1.0")val containerVolumeStore : String = s"$containerHome/data"
 
   val dir : String = "containerize"
   val dirPrefix : String = "build_"
@@ -56,8 +56,9 @@ package object Options {
   val networkDir : String = "network"
   val backupDir : String = "image-backups"
 
-  @deprecated("1.0")
-  var os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
+  private val os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
+  val errout : String = if(os == "windows") ">NUL 2>&1" else "> /dev/null 2>&1"
+
   @deprecated("1.0")
   def osExt : String = "sh"
 
@@ -70,19 +71,19 @@ package object Options {
   private var _swarmName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
   def swarmName : String = toolbox.getNameDenominator(_swarmName)
 
-  var jar : Boolean = true
+  @deprecated("1.0") var jar : Boolean = true
   var stage : Stage = compose
 
-  var nocache : Boolean = false
-  var showInfos : Boolean = true
-  var cleanup : Boolean = true
-  var cleanBuilds : Boolean = true //todo set faflse
-  var saveImages : Boolean = false //todo set faflse; throw warning takes forever
+  @deprecated("1.0")var nocache : Boolean = false
+  @deprecated("1.0")var showInfos : Boolean = true
+  @deprecated("1.0")var cleanup : Boolean = true
+  @deprecated("1.0")var cleanBuilds : Boolean = true //todo set faflse
+  @deprecated("1.0")var saveImages : Boolean = false //todo set faflse; throw warning takes forever
 
-  var dockerUsername : String = "sasye93"
-  var dockerPassword : String = "Jana101997"
-  var dockerHost : String = ""
-  var dockerRepository : String = "plugin" //todo replace, maybe just with _
+  @deprecated("1.0")var dockerUsername : String = "sasye93"
+  @deprecated("1.0")var dockerPassword : String = "Jana101997"
+  @deprecated("1.0")var dockerHost : String = ""
+  @deprecated("1.0")var dockerRepository : String = "plugin" //todo replace, maybe just with _
 
   val defaultContainerPort = 0
   val defaultContainerHost = "127.0.0.1"
@@ -107,60 +108,34 @@ package object Options {
    * => jre-alpine
    * => redis (smallest) or couchdb
    */
-  var jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
-  var dbBaseImage : Option[String] = Some("couchdb:latest") //todo: everything else, starting db, persistent /data storage, etc.
-  var customBaseImage : Option[String] = Some("httpd:latest") //todo set db and custom to none as default
+  @deprecated("1.0")var jreBaseImage : String = "openjdk:8-jre" //"openjdk:8-jre-alpine"
+  @deprecated("1.0")var dbBaseImage : Option[String] = Some("mongo:latest") //todo: everything else, starting db, persistent /data storage, etc.
+  @deprecated("1.0")var customBaseImage : Option[String] = Some("httpd:latest") //todo set db and custom to none as default
 
   /**
     * global script & configs for every service.
     */
-  private var setupHomePath : Path = _
+  @deprecated("1.0")private var setupHomePath : Path = _
   def getSetupScript(implicit logger : Logger) : Option[File] = resolvePath(setupScriptPath)
   private var setupScriptPath : Path = _
   def getSetupConfig(implicit logger : Logger) : Option[File] = resolvePath(setupConfigPath)
   private var setupConfigPath : Path = _
 
-  def resolvePath(p : Path)(implicit logger : Logger) : Option[File] = p match{
-    case null => None
-    case p if (!p.isAbsolute && Check ? setupHomePath) => Some(Paths.get(setupHomePath.toString, p.toString).toFile)
-    case p if (!p.isAbsolute) => logger.error(s"You can only supply a relative path to a file if you first set your home directory with 'home=XXX', otherwise you must supply an absolute path: ${p.toString}."); None
-    case _ => Some(p.toFile)
-  }
-
-  object defaultConfig{
-    @deprecated("1.0", "Disabled.") val public : Boolean = true
-    val replicas : Double = 1
-    val cpu_limit : Double = 0.2
-    val cpu_reserve : Double = 0.1
-    val memory_limit : String = "256M"
-    val memory_reserve : String = "64M"
-    val deploy_mode : String = "replicated"
-
-    // non docker specific options
-    val network_mode : String = "default"  //default | isolated  //todo this is now only for single services (prod isolation), also make on module level and prohibit this for global config.
-
-    // non docker specific without default
-    val script : Option[String] = None
-
-    var jreBaseImage : String = Options.jreBaseImage //"openjdk:8-jre-alpine"
-    var dbBaseImage : Option[String] = Options.dbBaseImage //todo: everything else, starting db, persistent /data storage, etc.
-    var customBaseImage : Option[String] = Options.customBaseImage
-
-    val JSON : String = {
-        "{" +
-        "\"public\":\"" + public + "\"," +
-        "\"deploy_mode\":\"" + deploy_mode + "\"," +
-        "\"replicas\":\"" + replicas + "\"," +
-        "\"cpu_limit\":\"" + cpu_limit + "\"," +
-        "\"cpu_reserve\":\"" + cpu_reserve + "\"," +
-        "\"memory_limit\":\"" + memory_limit + "\"," +
-        "\"memory_reserve\":\"" + memory_reserve + "\"," +
-        "\"network_mode\":\"" + network_mode + "\"," + // non docker specific options
-        "\"jreBaseImage\":\"" + jreBaseImage + "\"" +
-        "}"
+  @deprecated("1.0")def resolvePath(p : Path)(implicit logger : Logger) : Option[File] = if(p != null) resolvePath(p) else None
+  @deprecated("1.0")def resolvePath(p : String)(implicit logger : Logger) : Option[File] = {
+    try{
+      Path.of(p) match{
+        case null => None
+        case p if (!p.isAbsolute && Check ? setupHomePath) => Some(Paths.get(setupHomePath.toString, p.toString).toFile)
+        case p if (!p.isAbsolute) => logger.error(s"You can only supply a relative path to a file if you first set your home directory with 'home=XXX', otherwise you must supply an absolute path: ${p.toString}."); None
+        case p @ _ => Some(p.toFile)
+      }
+    }
+    catch{
+      case _ : java.nio.file.InvalidPathException => None
+      case _ : Throwable => None
     }
   }
-
 
   def processOptions(options: List[String], error: String => Unit): Unit = {
 

@@ -13,6 +13,9 @@ class DependencyResolver(implicit val plugin : Containerize) {
   import plugin._
   import global._
 
+  def getModuleOfEntryPoint(entryPoint: TSimpleEntryDef, Modules : TModuleList) : Option[TModuleDef] = {
+    Modules.find(_.peers.exists(entryPoint.peerClassSymbolString == _.className))
+  }
   def getAssocEntryPointsOfPeer(entryPoints : TEntryList, p : TPeerDef) : TEntryList = {
     entryPoints.filter(e => e.peerClassSymbolString == p.className)
   }

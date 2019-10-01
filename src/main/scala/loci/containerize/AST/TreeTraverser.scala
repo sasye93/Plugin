@@ -3,10 +3,8 @@ package loci.containerize.AST
 import java.io.File
 import java.nio.file.Paths
 
-import loci.containerize.IO.ContainerConfig
 import loci.containerize.main.Containerize
 import loci.containerize.Options
-import loci.containerize.types.ContainerEntryPoint
 
 import scala.collection.immutable.HashMap
 import scala.collection.mutable

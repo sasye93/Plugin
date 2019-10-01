@@ -55,6 +55,9 @@ class Runner(logger : Logger) {
       logger.warning("Could not logout.")
     }
   }
+  def dockerPull(tag : String) : Unit = {
+    Process(s"docker pull $tag").!(logger)
+  }
 
   //todo doesnt care about order
   @deprecated("")

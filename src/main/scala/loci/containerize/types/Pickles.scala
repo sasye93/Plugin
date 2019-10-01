@@ -5,33 +5,30 @@ import java.io.File
 
 import loci.containerize.Options
 import loci.containerize.Check
-import loci.containerize.IO.{ContainerConfig, Logger}
+import loci.containerize.IO.Logger
 import loci.containerize.main.Containerize
 
+import upickle.default.{ReadWriter => RW, _}
 import scala.annotation.meta.{getter, setter}
 import scala.collection.mutable
 import scala.tools.nsc.Global
 
+sealed trait Pickle
+object Pickle {
+  implicit val rw: RW[Pickle] = RW.merge(
+    SimplifiedContainerEntryPoint.rw,
+    SimplifiedConnectionEndPoint.rw,
+    SimplifiedContainerModule.rw,
+    SimplifiedPeerDefinition.rw)
+}
 //@compileTimeOnly("this class is for internal use only.")
 
-class ContainerEntryPoint(from : SimplifiedContainerEntryPoint)(implicit val plugin : Containerize) extends SimplifiedContainerEntryPoint(
+class ContainerEntryPoint(from : SimplifiedContainerEntryPoint, mod : Option[ContainerModule])(implicit val plugin : Containerize) extends SimplifiedContainerEntryPoint(
   from.entryClassSymbolString, from.peerClassSymbolString, from.configPath, from.endPoints, from.isGateway
 ) {
   import plugin._
-  import plugin.global._
 
-  val configFile : Option[File] = configPath match{
-    case Some(cfg) =>
-      val f : File = Options.resolvePath(Paths.get(cfg)).orNull
-      if(Check ? f && f.exists() && f.isFile)
-        Some(f)
-      else {
-        logger.error(s"Cannot find annotated JSON config file for entry point: $cfg")
-        None
-      }
-    case None => None
-  }
-  val config : ContainerConfig = new ContainerConfig(configFile.orNull)(io, plugin)
+  lazy val config : ContainerConfig = new ContainerConfig(configPath, if(mod.isDefined) Some(mod.get.config) else None)(io, plugin)
 
   @deprecated("1.0") val setupScript = null
 
@@ -87,16 +84,6 @@ class ContainerEntryPoint(from : SimplifiedContainerEntryPoint)(implicit val plu
   }
   */
 }
-import upickle.default.{ReadWriter => RW, _}
-
-sealed trait Picks
-object Picks {
-  implicit val rw: RW[Picks] = RW.merge(
-    SimplifiedContainerEntryPoint.rw,
-    SimplifiedConnectionEndPoint.rw,
-    SimplifiedContainerModule.rw,
-    SimplifiedPeerDefinition.rw)
-}
 
 case class SimplifiedContainerEntryPoint(
                                           val entryClassSymbolString : String,
@@ -104,7 +91,7 @@ case class SimplifiedContainerEntryPoint(
                                           val configPath : Option[String],
                                           val endPoints : List[SimplifiedConnectionEndPoint] = List[SimplifiedConnectionEndPoint](),
                                           val isGateway : Boolean = false
-                                        ) extends Picks{
+                                        ) extends Pickle{
 
   def getLocDenominator : String = Paths.get(loci.container.Tools.getIpString(peerClassSymbolString).split("_").last, loci.container.Tools.getIpString(entryClassSymbolString)).toString
 }
@@ -118,14 +105,24 @@ case class SimplifiedConnectionEndPoint(
                                          val way : String,
                                          val version : String,
                                          val method : String = "unknown"
-                                       ) extends Picks
+                                       ) extends Pickle
 object SimplifiedConnectionEndPoint {
   implicit val rw: RW[SimplifiedConnectionEndPoint] = macroRW
 }
+
+
+class ContainerModule(from : SimplifiedContainerModule)(implicit val plugin : Containerize) extends SimplifiedContainerModule(
+  from.moduleName, from.peers, from.configPath
+) {
+  import plugin._
+
+  lazy val config : ModuleConfig = new ModuleConfig(configPath)(io, plugin)
+}
 case class SimplifiedContainerModule(
-                                     val moduleName : String,
-                                     val peers : List[SimplifiedPeerDefinition]
-                                     ) extends Picks{
+                                      val moduleName : String,
+                                      val peers : List[SimplifiedPeerDefinition],
+                                      val configPath : Option[String],
+                                    ) extends Pickle{
 
   def getLocDenominator : String = loci.container.Tools.getIpString(moduleName)
 }
@@ -134,8 +131,8 @@ object SimplifiedContainerModule {
 }
 
 case class SimplifiedPeerDefinition(
-                                      val className : String,
-                                    ) extends Picks
+                                     val className : String,
+                                   ) extends Pickle
 object SimplifiedPeerDefinition {
   implicit val rw: RW[SimplifiedPeerDefinition] = macroRW
 }

@@ -8,7 +8,7 @@ import java.util.Calendar
 import loci.containerize.AST.DependencyResolver
 import loci.containerize.IO.IO
 import loci.containerize.main.Containerize
-import loci.containerize.types.{SimplifiedContainerEntryPoint, ContainerEntryPoint, SimplifiedContainerModule, TempLocation}
+import loci.containerize.types.TempLocation
 
 import scala.tools.nsc.plugins.PluginComponent
 import scala.reflect.internal.Phase
@@ -49,15 +49,20 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         /**
          * load analyzed peer and module data.
          */
-        var Modules : TModuleList = new File(Options.tempDir.toUri).listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TModuleDef]())((L, mod) => {
-          scala.util.Try{ L :+ io.deserialize[TModuleDef](mod.toPath).get }.getOrElse(L)
-        })
+        val tempDir : File = new File(Options.tempDir.toUri)
+        if(tempDir == null || !tempDir.exists) return;
+
+        var Modules : TModuleList = tempDir.listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TSimpleModuleDef]())((L, mod) => {
+          scala.util.Try{ L :+ io.deserialize[TSimpleModuleDef](mod.toPath).get }.getOrElse(L)
+        }).map(mod => new TModuleDef(mod))
+
         Options.containerize = Modules.nonEmpty
         if(!Options.containerize) return;
 
-        var EntryPoints : TEntryList = new File(Options.tempDir.toUri).listFiles((f) => f.getName.endsWith(".ep")).foldLeft(List[TSimpleEntryDef]())((L, ep) => {
+        var EntryPoints : TEntryList = tempDir.listFiles((f) => f.getName.endsWith(".ep")).foldLeft(List[TSimpleEntryDef]())((L, ep) => {
           scala.util.Try{ L :+ io.deserialize[TSimpleEntryDef](ep.toPath).get }.getOrElse(L)
-        }).map(ep => new ContainerEntryPoint(ep))
+        }).map(ep => new TEntryDef(ep, dependencyResolver.getModuleOfEntryPoint(ep, Modules)))
+
         var Peers : TPeerList = Modules.foldLeft(List[TPeerDef]())((L, m) => L ++ m.peers)
 
         plugin.dependencyResolver.dependencies(EntryPoints, Peers) match{ case (a,b) => EntryPoints = a; Peers = b; }
@@ -112,7 +117,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           io.recursiveClearDirectory(plugin.homeDir)
         }
 
-        val locs : collection.mutable.Map[scala.Symbol, List[TempLocation]] = collection.mutable.HashMap[scala.Symbol, List[TempLocation]]()
+        val locs : collection.mutable.Map[TModuleDef, List[TempLocation]] = collection.mutable.HashMap[TModuleDef, List[TempLocation]]()
         val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
 
         def copy(module : TModuleDef, entryPoint : TEntryDef) : Unit = {
@@ -121,7 +126,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           io.createDirRecursively(s) match{
             case Some(d) =>
               io.copyContentOfDirectory(plugin.outputDir.toPath, Paths.get(d.getAbsolutePath, "classfiles"))
-              locs update (scala.Symbol(module.moduleName), locs.getOrElse(scala.Symbol(module.moduleName), List[TempLocation]()) :+ TempLocation(entryPoint.entryClassSymbolString, d.toPath, entryPoint))
+              locs update (module, locs.getOrElse(module, List[TempLocation]()) :+ TempLocation(entryPoint.entryClassSymbolString, d.toPath, entryPoint))
             case None => logger.error(s"Could not create directory: ${ s.toString }")
           }
           /**
@@ -161,7 +166,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         })
 
 
-        val builder = new Builder(plugin.io).getBuilder(locs.toMap.map(k => (k._1.name, k._2)), buildPath.toFile)
+        val builder = new Builder(plugin.io).getBuilder(locs.toMap, buildPath.toFile)
         val composer = new Compose(plugin.io)(buildPath.toFile).getComposer
 
         var t0 = System.nanoTime()
@@ -186,6 +191,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           builder.buildDockerRunScripts()
           t0 = System.nanoTime()
           logger.info(s"t4: ${(t0-t1)/1000000000}")
+          builder.buildGlobalDatabase(Modules.map(mod => (Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, mod.getLocDenominator), mod)))
           builder.buildDockerImages()
           t1 = System.nanoTime()
           logger.info(s"t5: ${(t1-t0)/1000000000}")
@@ -202,10 +208,10 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         logger.info(s"t6: ${(t1-t0)/1000000000}")
         if(Options.stage >= Options.compose){
           //todo were here
-          locs.foreach(l => composer.buildDockerCompose(l._1.name, l._2))
+          locs.foreach(l => composer.buildDockerCompose(l._1, l._2))
           t0 = System.nanoTime()
           logger.info(s"t7: ${(t0-t1)/1000000000}")
-          val stacks = locs.toList.map(_._1.name)
+          val stacks = locs.toList.map(_._1.moduleName)
           composer.buildDockerSwarm(stacks)
           t1 = System.nanoTime()
           logger.info(s"t8: ${(t1-t0)/1000000000}")
@@ -213,6 +219,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           t0 = System.nanoTime()
           logger.info(s"t9: ${(t0-t1)/1000000000}")
           composer.buildDockerStack(locs.toList)
+          composer.buildTroubleshootScripts(locs.toList)
           t1 = System.nanoTime()
           logger.info(s"t10: ${(t1-t0)/1000000000}")
 

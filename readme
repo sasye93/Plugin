@@ -35,3 +35,31 @@ script in container must have unix ending !
 
 err inspect:
 docker service ps --no-trunc {serviceName}
+
+// volumes are not multi host fähig, local treiber, aber es gibt keinen...
+
+//// known bugs
+#7178 https://github.com/scala/scala/pull/7178
+ fixed in 2.13
+ => no recursive call of object inside function/constructor, so resolveIp(Client) must be done above and then referred inside.
+only primitives in calls
+ all or no ports published, as services size should be small anyway, and sep of concerns
+
+ swarm services are not  attachable, in normal containers with -i you can docker attach xxx and directly use stdin for process
+ name must be unique; but containers can also communicate via --alias, so --alias must containt the name resolved via resolveIp, nut necessraly name.
+
+ cred should be stored in docker cred helper / store (hint in schrift)
+ common failure is running out of memory, makes services/containers shuitdown wihtout notice or log entry or anything all the time
+
+ libs must be copied because they must be inside docekr context
+
+ low ports crush container??, recommended: 32768 to 61000
+
+ in @ config """ strings, no .stripMargin!
+
+ nach wie vor problem: keine mehrere main methoden (allg gleiche methoden)
+
+ if your code is statefull, container or service with replica one => maybe as parameter with automatic replica=1 or something?
+
+ >
+ docker secrets, describe how works

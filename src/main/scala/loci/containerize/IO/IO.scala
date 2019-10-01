@@ -7,7 +7,7 @@ import java.nio.file.{CopyOption, FileAlreadyExistsException, Files, Path, Paths
 
 import loci.containerize.{Check, Options}
 import loci.containerize.main.Containerize
-import loci.containerize.types.{Picks, TempLocation}
+import loci.containerize.types.{Pickle, TempLocation}
 
 import scala.io.{BufferedSource, Source}
 import upickle.default._
@@ -15,7 +15,7 @@ import upickle.default._
 //todo try catch
 class IO(implicit val logger : Logger) {
 
-  def serialize[T <: Picks](obj : Picks, path : Path) : Unit = {
+  def serialize[T <: Pickle](obj : Pickle, path : Path) : Unit = {
     var oos : OutputStreamWriter = null
     try{
       val json = write(obj)
@@ -33,10 +33,10 @@ class IO(implicit val logger : Logger) {
         oos.close()
     }
   }
-  def deserialize[T <: Picks](path : Path) : Option[T] = {
+  def deserialize[T <: Pickle](path : Path) : Option[T] = {
     try{
       val f : File = path.toFile
-      val obj : Picks = upickle.default.read[Picks](f)
+      val obj : Pickle = upickle.default.read[Pickle](f)
       val o = obj match{
         case _ : T => obj.asInstanceOf[T]
         case _ => throw new IOException(s"Wrong object type when deserializing: ${obj}")
@@ -65,7 +65,7 @@ class IO(implicit val logger : Logger) {
 
       bs = Source.fromFile(file)
 
-      return bs.getLines.reduce((S, l) => S + l)
+      return bs.getLines mkString "\n"
     }
     catch{
       case e @ (_ : FileAlreadyExistsException |
@@ -83,7 +83,7 @@ class IO(implicit val logger : Logger) {
     ""
   }
 
-  def buildFile(content : String, path : Path, binary : Boolean = false) : Option[File] = {
+  def buildFile(content : String, path : Path, binary : Boolean = false, unix : Boolean = false) : Option[File] = {
     var bw : BufferedWriter = null
     var os : DataOutputStream = null
     try{
@@ -96,13 +96,15 @@ class IO(implicit val logger : Logger) {
         file.delete()
       file.createNewFile()
 
+      val con = if(unix) content.replaceAll("\r\n", "\n").replaceAll("\r", "\n") else content
+
       if(binary){
         os = new DataOutputStream(new FileOutputStream(file));
-        os.write(content.getBytes());
+        os.write(con.getBytes());
       }
       else{
         bw = new BufferedWriter(new FileWriter(file))
-        bw.write(content)
+        bw.write(con)
       }
 
       return Some(file)
@@ -228,4 +230,27 @@ class IO(implicit val logger : Logger) {
       f.listFiles().flatMap(file => listDependencies(file.toPath)).toList
   }
   def buildScript(CMD : String) : String  = "#!/bin/sh\n" + CMD.replaceAll("\\r\\n", "\n") //todo shall we support bat?
+
+
+  def resolvePath(p : Path)(implicit logger : Logger) : Option[File] = if(p != null) resolvePath(p) else None
+  def resolvePath(p : String, homeDir : String = null)(implicit logger : Logger) : Option[File] = {
+    try{
+      Path.of(p) match{
+        case null => None
+        case p if (!p.isAbsolute && Check ? homeDir) => Some(Paths.get(homeDir.toString, p.toString).toFile)
+        case p if (!p.isAbsolute) => logger.error(s"You can only supply a relative path to a file if you first set your home directory with the 'home' option in your module config, otherwise you must supply an absolute path: ${p.toString}."); None
+        case p @ _ => Some(p.toFile)
+      }
+    }
+    catch{
+      case _ : java.nio.file.InvalidPathException => None
+      case _ : Throwable => None
+    }
+  }
+  def checkFile(path : Path) : Boolean = {
+    val exists = Files.exists(path)
+    if(!exists) logger.error(s"Could not find file: ${path}")
+    exists
+  }
+  def checkFile(path : String) : Boolean = checkFile(Path.of(path))
 }

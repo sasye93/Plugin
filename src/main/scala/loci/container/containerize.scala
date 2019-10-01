@@ -12,7 +12,7 @@ import scala.reflect.macros.blackbox
 import scala.reflect.runtime.universe
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
-class containerize extends StaticAnnotation {
+class containerize(config : String = "") extends StaticAnnotation {
   def macroTransform(annottees: Any*) : Any = macro loci.container.ContainerizeImpl.impl
 }
 
@@ -33,7 +33,20 @@ object ContainerizeImpl {
 
     //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
-      case (m : ModuleDef) :: Nil => m.impl match{
+      case (m : ModuleDef) :: Nil =>
+
+        /**
+         * extract macro arguments.
+         */
+        val config : Option[String] = (c.prefix.tree match {
+          case q"new $s(config=$p)" if p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
+          case q"new $s($p)" if p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
+          case q"new $s($p)" => if(p.nonEmpty) c.warning(c.enclosingPosition, s"Did not recognize config provided, : $p"); None
+          case q"new $s" => None
+          case _ => c.abort(c.enclosingPosition, "Invalid @containerize annotation style. Use '@containerize(path : String = \"\"), e.g. @containerize(\"scripts/mycfg.xml\") or without parameter.")
+        })
+
+        m.impl match{
         case Template(parents, self, body) =>
           c.info(null, "this is it : " + showRaw(body), true)
           val mod = tpe(m).asInstanceOf[c.Tree]
@@ -44,7 +57,6 @@ object ContainerizeImpl {
                   m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer]))  //If @peer has already been processed.
               ) => SimplifiedPeerDefinition(tpe(mod).symbol.fullName + "." + m.name.toString)
           }).toList
-          c.info(c.enclosingPosition, "members: " + mod.tpe.members.map(x => (x.name, x.typeSignature)).toString, true)
           c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.className).toString, true)
           /**
            * save it.
@@ -52,7 +64,8 @@ object ContainerizeImpl {
           implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
           val io = new IO()
           io.createDir(Options.tempDir)
-          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers), Options.tempDir.resolve(mod.symbol.fullName + ".mod"))
+          //if(!mod.symbol.contentEquals(NoSymbol.fullName)) todo active
+          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers, config), Options.tempDir.resolve(mod.symbol.fullName + ".mod"))
 
           /**
           if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
