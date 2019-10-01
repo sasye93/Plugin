@@ -15,7 +15,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
   def getComposer : compose = new compose()
 
   class compose(){
-    val logger : Logger = plugin.logger
+    implicit val logger : Logger = plugin.logger
     var composePath : File = _
     val filesPath : String = "files"
 
@@ -159,10 +159,12 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
               S + "  " + d.getImageName + ":\n"
             }) +
             moduleSecrets.foldLeft("secrets:\n")((S, d) => {
-              io.checkFile(d._2)
-              S + s"""  ${d._1}:
-                   |    file: "${StringContext.processEscapes(d._2)}"
+              val file = io.resolvePath(d._2, moduleCfg.getHome.orNull)
+              S + (if(file.isDefined){
+                s"""  ${d._1}:
+                   |    file: "${file.get.getPath.replace("\\", "\\\\")}"
                    |""".stripMargin
+              } else "")
             })
 
       /**

@@ -4,6 +4,8 @@
       <root url="jar://$USER_HOME$/.ivy2/cache/de.tuda.stg/scala-loci-lang-transmitter-rescala_2.12/jars/scala-loci-lang-transmitter-rescala_2.12-0.3.0.jar!/" />
     </CLASSES>
     <JAVADOC />
-    <SOURCES />
+    <SOURCES>
+      <root url="jar://$USER_HOME$/.ivy2/cache/de.tuda.stg/scala-loci-lang-transmitter-rescala_2.12/srcs/scala-loci-lang-transmitter-rescala_2.12-0.3.0-sources.jar!/" />
+    </SOURCES>
   </library>
 </component>
