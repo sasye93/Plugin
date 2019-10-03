@@ -44,6 +44,15 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
     case None => plugin.logger.error(s"Parsing JSON config for entry point failed, ${if (Check ? config) ": " + config.toString + ". Not a valid JSON document?" else "default options seem to be broke (internal failure). Please supply a manual config file with @config."}"); null
   }
 
+  {
+    val cfgClass = this.getClass.getName
+    val cfgType = this.getConfigType
+    if(cfgType.isDefined){
+      if(cfgType.get == "module" && (cfgClass != Options.toolbox.toInstanceClassName(ModuleConfig))) io.logger.error("You cannot pass a module config as a service config (type=module).")
+      if(cfgType.get == "service" && (cfgClass != Options.toolbox.toInstanceClassName(ContainerConfig))) io.logger.error("You cannot pass a service config as a module config (type=service).")
+    }
+  }
+
   protected def getValueOfKey(key : String) : Option[Any] = Check ?=>[Option[Any]] (this.map, this.map.get(key), None)
   protected def parseString(v : Any) : Option[String] = Try { v.toString }.toOption
   //def parseInt(v : Any) : Option[Int] = Try { parseString(v).get.toInt }.toOption
@@ -59,6 +68,7 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
   protected def getDoubleOfKey(key : String) : Option[Double] = getValueOfKey(key) match{ case Some(s) => parseDouble(s); case _ => None }
   protected def getBooleanOfKey(key : String) : Option[Boolean] = getValueOfKey(key) match{ case Some(s) => parseBoolean(s); case _ => None }
 
+  private def getConfigType : Option[String] = getStringOfKey("type")
   def getHome : Option[String] = homeDir.orElse(getStringOfKey("home"))
   //Script
   def getScript(implicit logger : Logger) : Option[File] = {

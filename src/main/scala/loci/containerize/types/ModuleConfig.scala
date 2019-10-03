@@ -20,6 +20,8 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
   def getSaveImages : Boolean = getBooleanOfKey("saveImages").getOrElse(default.saveImages)
   def getShowInfos : Boolean = getBooleanOfKey("showInfos").getOrElse(default.showInfos)
 
+  def getStateful : Boolean = getBooleanOfKey("stateful").getOrElse(default.stateful)
+
   def getDockerRepository : String = getStringOfKey("dockerRepository").getOrElse(default.dockerRepository)
   def getDockerHost : Option[String] = getStringOfKey("dockerHost").orElse(default.dockerHost)
 
@@ -54,6 +56,8 @@ object ModuleConfig{
     val saveImages : Boolean =  false
     val showInfos : Boolean =  true
 
+    val stateful : Boolean =  false
+
     val dockerRepository : String = "plugin"
     val dockerHost : Option[String] = None
 
@@ -65,6 +69,7 @@ object ModuleConfig{
 
     val JSON : String = {
       s"""{
+         |  "stateful": $stateful,
          |  "cleanBuilds": $cleanBuilds,
          |  "cleanup": $cleanup,
          |  "nocache": $nocache,

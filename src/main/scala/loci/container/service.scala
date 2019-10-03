@@ -71,7 +71,7 @@ object ServiceImpl {
         def eq(p : String) : Boolean = (p.equalsIgnoreCase("service") || p.equalsIgnoreCase("gateway"))
         val config : Option[String] = (c.prefix.tree match {
             case q"new $s(config=$p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => c.info(c.enclosingPosition, "1 : " + p.toString(), true);Some(p.toString.stripPrefix("\"").stripSuffix("\""))
-            case q"new $s($p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => c.info(c.enclosingPosition, "2 : " + p.toString(), true);Some(p.toString.stripPrefix("\"").stripSuffix("\""))
+            case q"new $s($p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => c.info(c.enclosingPosition, "2 : " + p.toString() + ":" + eval[String](p.asInstanceOf[tc.typeContext.Tree]), true);Some(p.toString.stripPrefix("\"").stripSuffix("\""))
             case q"new $s($p)" if eq(s.toString) => if(p.nonEmpty) c.warning(c.enclosingPosition, s"Did not recognize config provided, : $p"); None
             case q"new $s" => None
             case _ => c.abort(c.enclosingPosition, "Invalid @service annotation style. Use '@service(path : String = \"\"), e.g. @service(\"scripts/mycfg.xml\") or without parameter.")

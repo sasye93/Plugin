@@ -13,6 +13,7 @@ package object Options {
   object toolbox{
     def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
     def toUnixString(p : Path): String = p.toString.replace("\\", "/")
+    def toInstanceClassName(obj : AnyRef) : String = obj.getClass.getName.stripSuffix("$")
     def getNameDenominator(s : String) : String = loci.container.Tools.getIpString(s)
   }
 

@@ -53,6 +53,8 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
               s"""  $name:
               |    # configuration for $name
               |    image: ${ if(Options.published) d.getRepoImageName else d.getImageName }
+              |    stdin_open: ${ cfg.getAttachable }
+              |    tty: ${ cfg.getAttachable }
               |    deploy:
               |      mode: ${ cfg.getDeployMode }
               |      replicas: ${ cfg.getReplicas }
@@ -158,6 +160,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
             dirs.foldLeft("volumes:\n")((S, d) => {
               S + "  " + d.getImageName + ":\n"
             }) +
+          (if(moduleSecrets.nonEmpty)
             moduleSecrets.foldLeft("secrets:\n")((S, d) => {
               val file = io.resolvePath(d._2, moduleCfg.getHome.orNull)
               S + (if(file.isDefined){
@@ -165,7 +168,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                    |    file: "${file.get.getPath.replace("\\", "\\\\")}"
                    |""".stripMargin
               } else "")
-            })
+            }) else "")
 
       /**
        * monitor_service:
@@ -329,11 +332,11 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
             s"""echo "--------------------------------------------------------------------------"
                |echo "Status of service ${ d.getServiceName }:"
                  |echo "----------------- start of service error output --------------------------"
-                 |ID="$$(docker service ps -f "desired-state=running" --format "{{.ID}}" ${ Options.toolbox.getNameDenominator(m._1.moduleName) + "_" + d.getServiceName })"
+                 |ID="$$(docker service ps --filter "desired-state=running" --format "{{.ID}}" ${ Options.toolbox.getNameDenominator(m._1.moduleName) + "_" + d.getServiceName })"
                  |if [ -z "$${ID}" ]; then
                  |  echo "Service not running."
                  |  else
-                 |    OUT="$$(docker service logs "$$ID") $$(docker service ps --no-trunc --format "{{.Error}}" -f "id=$$ID")"
+                 |    OUT="$$(docker service logs --raw --details --timestamps "$$ID") $$(docker ps --no-trunc --format "{{.Error}}" --filter "id=$$ID")"
                  |    ([ "$${#OUT}" -lt 2 ] || echo "Everything ok.") &&  echo "$$OUT"
                  |fi
                  |echo "----------------- end of service error output --------------------------"

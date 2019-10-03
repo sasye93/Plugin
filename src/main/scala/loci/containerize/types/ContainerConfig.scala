@@ -18,12 +18,13 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
 
   //Docker/Swarm-specific
   @deprecated("use @gateway") def getIsPublic : Boolean = getBooleanOfKey("public").getOrElse(default.public)
-  def getReplicas : Integer = Math.ceil(getDoubleOfKey("replicas").getOrElse(default.replicas)).toInt
+  def getReplicas : Integer = if(moduleConfig.isDefined && moduleConfig.get.getStateful) 1 else Math.ceil(getDoubleOfKey("replicas").getOrElse(default.replicas)).toInt
   def getCPULimit : Double = getDoubleOfKey("cpu_limit").getOrElse(default.cpu_limit)
   def getCPUReserve : Double = getDoubleOfKey("cpu_reserve").getOrElse(default.cpu_reserve)
   def getMemLimit : String = getStringOfKey("memory_limit").getOrElse(default.memory_limit)
   def getMemReserve : String = getStringOfKey("memory_reserve").getOrElse(default.memory_reserve)
   def getDeployMode : String = getStringOfKey("deploy_mode").getOrElse(default.deploy_mode)
+  def getAttachable : Boolean = getBooleanOfKey("attachable").getOrElse(default.attachable)
 
   //Non-Docker specific
   def getNetworkMode : String = getStringOfKey("network_mode").getOrElse(default.network_mode)
@@ -78,6 +79,7 @@ object ContainerConfig{
     val memory_limit : String = "128M"
     val memory_reserve : String = "64M"
     val deploy_mode : String = "replicated"
+    val attachable : Boolean = true
 
     // non docker specific options
     val network_mode : String = "default"  //default | isolated  //todo this is now only for single services (prod isolation), also make on module level and prohibit this for global config.
@@ -91,6 +93,7 @@ object ContainerConfig{
     val JSON : String = {
       "{" +
         "\"public\":\"" + public + "\"," +
+        "\"attachable\":\"" + attachable + "\"," +
         "\"deploy_mode\":\"" + deploy_mode + "\"," +
         "\"replicas\":\"" + replicas + "\"," +
         "\"cpu_limit\":\"" + cpu_limit + "\"," +
