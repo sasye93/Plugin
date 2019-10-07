@@ -35,8 +35,9 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
   def getLocalDbIdentifier : Option[String] = getStringOfKey("localDb").orElse(default.localDb)
   def getLocalDb : Option[String] = getLocalDbIdentifier match{
     case Some("mongo") => Some("mongo:latest")
+    case Some("mysql") => Some("mysql:latest")
     case Some("none") => None
-    case Some(db) => io.logger.warning(s"The option you supplied for localDb in your module config is not supported and thus discarded: $db"); None
+    case Some(db) => io.logger.warning(s"The option you supplied for localDb in your module config is not supported and thus discarded: $db"); None //todo really not allow?
     case None => None
   }
   def getLocalDbCredentials : Option[(String, String)] = getTupleList("localDbCredentials", 2).map(t => (t.head.toString, t.last.toString)).headOption.orElse(default.localDbCredentials)

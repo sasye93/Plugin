@@ -21,7 +21,7 @@ class Network(io : IO)(val name : String, buildDir : Path, network : INetwork = 
     case Some(f) => networkDir = f
     case None => plugin.logger.error(s"Could not create directory for network scripts inside: $buildDir")
   }
-  def getName : String = plugin.toolbox.getNameDenominator(name)
+  def getName : String = Options.toolbox.getNameDenominator(name)
   def getType : String = network._type
 
   def buildSetupScript() : Unit = {

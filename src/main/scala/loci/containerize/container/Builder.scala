@@ -173,9 +173,9 @@ class Builder(io : IO)(implicit plugin : Containerize){
            |ENV SCALA_VERSION=${ util.Properties.versionNumberString }
            |WORKDIR /
            |RUN apt-get update && apt-get install apt-utils curl vim iptables net-tools iputils-ping procps -y
-           |RUN groupadd -r ${Options.swarmName} && useradd --no-log-init -r -g ${Options.swarmName} ${Options.swarmName}
-           |RUN mkdir -p ${Options.containerHome} && mkdir -p ${Options.libraryPathPrefix} && chown ${Options.swarmName}:${Options.swarmName} ${Options.containerHome} && chown ${Options.swarmName}:${Options.swarmName} ${Options.libraryPathPrefix}
-           |USER ${Options.swarmName}:${Options.swarmName}
+           |RUN groupadd -r ${cfg.getAppName} && useradd --no-log-init -r -g ${cfg.getAppName} ${cfg.getAppName}
+           |RUN mkdir -p ${Options.containerHome} && mkdir -p ${Options.libraryPathPrefix} && chown ${cfg.getAppName}:${cfg.getAppName} ${Options.containerHome} && chown ${cfg.getAppName}:${cfg.getAppName} ${Options.libraryPathPrefix}
+           |USER ${cfg.getAppName}:${cfg.getAppName}
            |COPY . ${Options.libraryPathPrefix}
            |""" + //todo make apts as external list
             Check ?=>[String] (script.orNull,
@@ -226,27 +226,44 @@ class Builder(io : IO)(implicit plugin : Containerize){
     }
     def buildDockerRunScripts() : Unit = {
       //todo we run containers => jedes mal wird neuer container created, danach nur gestoppt, existiert dann aber weiter => existing containers block creation with same name, also: possibly update instead of recreate?
-      val globalNet = new Network(plugin.io)(Options.swarmName, buildDir.toPath)
-      globalNet.buildSetupScript()
-      globalNet.buildNetwork()
+      dirs.keys.map(_.config.getAppName).toSet[String].foreach{ appName =>
+        val globalNet = new Network(plugin.io)(appName, buildDir.toPath)
+        globalNet.buildSetupScript()
+        globalNet.buildNetwork()
+      }
       dirs.keys.foreach{ module =>
         val moduleNet = new Network(plugin.io)(module.moduleName, buildDir.toPath)
 
         dirs.getOrElse(module, List()).foreach{ loc =>
 
+          val useDb = loc.entryPoint.config.getLocalDb.isDefined
+          val dbName = if(useDb) loc.getImageName + "_localdb" else ""
 //todo network switch for global net on off
           val CMDStart = //todo -v flag ok? removes volume associated //todo -a flag?
             s"""docker rm --volumes -f ${ loc.getImageName }
-               |docker volume create ${ loc.getImageName }
-               |docker run -id ${ if(loc.entryPoint.isGateway) loc.entryPoint.endPoints.filter(_.way != "connect").map(_.port).toSet.foldLeft("")((S, port) => S + s"--publish ${ port }:${ port } ") else "" } --name ${ loc.getImageName } --network=${ globalNet.getName } --volume ${ loc.getImageName }:${ module.config.getContainerVolumeStorage } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ loc.getImageName }
-               |docker network connect --alias ${ loc.getImageName } ${ moduleNet.getName } ${ loc.getImageName }
-               |docker container inspect -f \"Container '""".stripMargin + loc.getImageName + "' connected to " + globalNet.getName + " and " + moduleNet.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + loc.getImageName + "\n"
+               |docker volume create ${ loc.getImageName }""" +
+              (if(useDb) {//todo env vars user pw
+                s"""docker volume create $dbName
+                 |docker network create --attachable -d overlay ${loc.getImageName}
+                 |docker run -d --name $dbName --network ${loc.getImageName} --volume $dbName:/data -t ${ loc.entryPoint.config.getLocalDb }"""
+              } else "") +
+            s"""|docker run -id ${ if(loc.entryPoint.isGateway) loc.entryPoint.endPoints.filter(_.way != "connect").map(_.port).toSet.foldLeft("")((S, port) => S + s"--publish ${ port }:${ port } ") else "" } --name ${ loc.getImageName } --network=${loc.getImageName} --volume ${ loc.getImageName }:${ module.config.getContainerVolumeStorage } --cap-add=NET_ADMIN --cap-add=NET_RAW --sysctl net.ipv4.conf.eth0.route_localnet=1 -t ${ loc.getImageName }
+                |docker network connect --alias ${ loc.getImageName } ${ moduleNet.getName } ${ loc.getImageName }""" +
+              (if(useDb) s"docker network connect --alias ${ loc.getImageName } ${ dbName } ${ loc.getImageName }\n" else "") +
+            s"""|docker container inspect -f \"Container '""".stripMargin + loc.getImageName + "' connected to " + module.config.getAppName + " and " + moduleNet.getName + " with ip={{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}.\" " + loc.getImageName + "\n"
 
           val CMDStop =
-            s"""docker network disconnect ${ globalNet.getName } ${ loc.getImageName }
-               |docker network disconnect ${ moduleNet.getName } ${ loc.getImageName }
-               |docker stop ${ loc.getImageName }
-               |docker container rm -f ${ loc.getImageName }""".stripMargin
+            s"""docker network disconnect ${ module.config.getAppName } ${ loc.getImageName }
+               |docker network disconnect ${ moduleNet.getName } ${ loc.getImageName }""" +
+               (if(useDb){
+                 s"""docker network disconnect ${ dbName } ${ loc.getImageName }
+                    |docker stop ${ dbName }
+                    |docker container rm -f ${ dbName }
+                    |""".stripMargin
+
+               } else "") +
+            s"""|docker stop ${ loc.getImageName }
+                |docker container rm -f ${ loc.getImageName }""".stripMargin
 
           io.buildFile(io.buildScript(CMDStart), Paths.get(loc.getTempPathString, s"RunContainer.$osExt"))//todo add -p, .sh
           io.buildFile(io.buildScript(CMDStop), Paths.get(loc.getTempPathString, s"StopContainer.$osExt"))
@@ -255,7 +272,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
         moduleNet.buildNetwork()
       }
     }
-    def buildGlobalDatabase(modules : List[(Path, plugin.TModuleDef)]) : Unit = {
+    def buildGlobalDatabase(modules : List[(Path, plugin.TModuleDef)]) : Unit = { //todo cred secrets, env
       modules.filter(_._2.config.getGlobalDb.isDefined).foreach { mod =>
         val cfg = mod._2.config
         val db = cfg.getGlobalDb.get
@@ -263,7 +280,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
         val dbName = moduleName + "_globaldb"
         plugin.runner.dockerPull(db)
         val CMD = s"""docker volume create $dbName
-          |docker run -d --name $dbName --network ${ moduleName } --volume $dbName:${ cfg.getContainerVolumeStorage } -t ${ db }
+          |docker run -d --name $dbName --network ${ moduleName } --volume $dbName:/data -t ${ db }
           |""" //todo env vars user pw
         io.buildFile(io.buildScript(CMD.stripMargin), mod._1.resolve(s"startGlobalDb.$plExt"))
       }

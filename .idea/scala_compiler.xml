@@ -3,8 +3,11 @@
   <component name="ScalaCompilerConfiguration">
     <profile name="sbt 1" modules="plugin_6314" />
     <profile name="sbt 2" modules="scala-loci-containerize-extension">
+      <parameters>
+        <parameter value="-deprecation" />
+      </parameters>
       <plugins>
-        <plugin path="C:\Users\Simon S\.ivy2\cache\org.scalamacros\paradise_2.12.8\jars\paradise_2.12.8-2.1.1.jar" />
+        <plugin path="$USER_HOME$/.ivy2/cache/org.scalamacros/paradise_2.12.8/jars/paradise_2.12.8-2.1.1.jar" />
       </plugins>
     </profile>
     <profile name="test" modules="">

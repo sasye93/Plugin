@@ -29,6 +29,7 @@ class DependencyResolver(implicit val plugin : Containerize) {
   def startupOrderDependencies(entryPoints : TEntryPointMap) : Map[ClassSymbol, List[ClassSymbol]] = {
       entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.endPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeerSymbolString.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
   }
+  def filterDisabled(modules : TModuleList) : TModuleList = modules.filterNot(_.config.getDisabled)
   private def filterInvalid(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => !(e.peerClassSymbolString.isEmpty || e.entryClassSymbolString.isEmpty)), peerDefs)
   private def filterInvalidPeerRefs(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => peerDefs.exists(p => e.peerClassSymbolString == p.className)), peerDefs)
   //todo test

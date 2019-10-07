@@ -88,7 +88,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
               s"    networks:" +
               (if(cfg.getNetworkMode == "default") {
                 s"""
-              |      ${Options.swarmName}:
+              |      ${moduleCfg.getAppName}:
               |        aliases:
               |          - ${ d.getImageName }
               |"""
@@ -109,7 +109,12 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                    |      ${ d.getImageName }:
                    |        aliases:
                    |          - ${ d.getImageName + "_localdb" }
+                   |    volumes:
+                   |      - type: volume
+                   |        source: ${ d.getImageName + "_localdb" }
+                   |        target: /data/db
                    |""".stripMargin + //todo check volume should be generated automatically by db
+                //todo add for mysql, also at globaldb
                   (if(localDbCreds.isDefined && cfg.getLocalDbIdentifier.get == "mongo")
                 s"""    environment:
                    |      MONGO_INITDB_ROOT_USERNAME: ${ localDbCreds.get._1 }
@@ -132,6 +137,10 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
              |      $moduleNetworkName:
              |        aliases:
              |          - ${ moduleNetworkName + "_globaldb" }
+             |    volumes:
+             |      - type: volume
+             |        source: ${ moduleNetworkName + "_globaldb" }
+             |        target: /data/db
              |""".stripMargin +
             (if(globalDbCreds.isDefined && moduleCfg.getGlobalDbIdentifier.get == "mongo")
             s"""    environment:
@@ -140,7 +149,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                |""".stripMargin else "")
           } else "") +
           s"""networks:
-          |  ${Options.swarmName}:
+          |  ${moduleCfg.getAppName}:
           |    external: true
           |  $moduleNetworkName:
           |    driver: overlay
@@ -160,12 +169,18 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
             dirs.foldLeft("volumes:\n")((S, d) => {
               S + "  " + d.getImageName + ":\n"
             }) +
+            dirs.filter(_.entryPoint.config.getLocalDb.isDefined).foldLeft("")((S, d) => {
+              S + "  " + d.getImageName + "_localdb" + ":\n"
+            }) +
+          (if(moduleCfg.getGlobalDb.isDefined){
+            s"  ${ moduleNetworkName + "_globaldb" }:" + "\n"
+          } else "") +
           (if(moduleSecrets.nonEmpty)
             moduleSecrets.foldLeft("secrets:\n")((S, d) => {
               val file = io.resolvePath(d._2, moduleCfg.getHome.orNull)
               S + (if(file.isDefined){
                 s"""  ${d._1}:
-                   |    file: "${file.get.getPath.replace("\\", "\\\\")}"
+                   |    file: "${file.get.getPath.replaceAll("\\{1,}", "\\\\")}"
                    |""".stripMargin
               } else "")
             }) else "")
@@ -203,30 +218,34 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
 
       io.buildFile(CMD.stripMargin, Paths.get(composePath.getAbsolutePath, filesPath, multiTierModule.moduleName + ".yml"))
     }
-    def buildDockerSwarm(multiTierModules : List[String]) : Unit = {
+    def buildDockerSwarm(multiTierModules : List[plugin.TModuleDef]) : Unit = {
       val CMD = //todo grep leader necess?
-        s"""SKIP_NET_INIT=0
-           |(docker node ls | grep "Leader") ${Options.errout}
+       s"""(docker node ls | grep "Leader") ${Options.errout}
            |if [ $$? -ne 0 ]; then
            |  docker swarm init
            |fi
-           |docker network inspect ${Options.swarmName} ${Options.errout}
-           |if [ $$? -eq 0 ]; then
-           |  docker network rm ${Options.swarmName} ${Options.errout}
-           |  if [ $$? -ne 0 ]; then
-           |    echo "Could not remove network ${Options.swarmName}. Continuing with the old network. Remove network manually to update it next time."
-           |    SKIP_NET_INIT=1
-           |  fi
-           |fi
-           |if [ $$SKIP_NET_INIT -eq 0 ]; then
-           |  docker network create -d overlay --attachable=true ${Options.swarmName}
-           |fi
-           |echo "---------------------------------------------"
+           |""".stripMargin +
+      multiTierModules.map(_.config.getAppName).toSet.foldLeft("")((N, appName) => {
+        N + s"""SKIP_NET_INIT=0
+               |docker network inspect ${appName} ${Options.errout}
+               |if [ $$? -eq 0 ]; then
+               |  docker network rm ${appName} ${Options.errout}
+               |  if [ $$? -ne 0 ]; then
+               |    echo "Could not remove network ${appName}. Continuing with the old network. Remove network manually to update it next time."
+               |    SKIP_NET_INIT=1
+               |  fi
+               |fi
+               |if [ $$SKIP_NET_INIT -eq 0 ]; then
+               |  docker network create -d overlay --attachable=true ${appName}
+               |fi
+               |""".stripMargin
+      }) +
+       s"""|echo "---------------------------------------------"
            |echo ">>> Creating stacks from compose files... <<<"
            |echo "---------------------------------------------"
-           |""" +
+           |""".stripMargin +
             multiTierModules.foldLeft("")((M, m) => M + {
-              s"""bash stack-$m.sh
+              s"""bash stack-${m.moduleName}.sh
                  |if [ $$? -ne 0 ]; then
                  |  exit 1;
                  |fi
@@ -251,11 +270,11 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
            |echo "------------------------"
            |docker stack ls
            |echo "------------------------"
-           |""" +
+           |""".stripMargin +
           multiTierModules.foldLeft("")((M, m) => M + {
             s"""|echo "-----------------"
-                |echo "Services in stack '${Options.toolbox.getNameDenominator(m)}':"
-                |docker stack services ${Options.toolbox.getNameDenominator(m)}
+                |echo "Services in stack '${Options.toolbox.getNameDenominator(m.moduleName)}':"
+                |docker stack services ${Options.toolbox.getNameDenominator(m.moduleName)}
                 |""".stripMargin
           }) +
           """|
@@ -267,21 +286,22 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
            |echo ">> PRESS ANY KEY TO CONTINUE / CLOSE <<"
            |read -n 1 -s
            |exit 0
-           |"""
+           |""".stripMargin
 
-      io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
+      io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
     }
 
-    def buildDockerSwarmStop(multiTierModules : List[String]) : Unit = {
+    def buildDockerSwarmStop(multiTierModules : List[plugin.TModuleDef]) : Unit = {
       val CMD =
         multiTierModules.foldLeft("")((M, m) => M + {
-          s"""docker stack rm $m
-             |docker network rm $m
+          s"""docker stack rm ${m.moduleName}
+             |docker network rm ${m.moduleName}
              |""".stripMargin
         }) +
-        s"""docker network rm ${Options.swarmName}
-             |docker swarm leave -f
-             |""".stripMargin
+        multiTierModules.map(_.config.getAppName).toSet.foldLeft("")((N, appName) => {
+          N + s"docker network rm ${appName}\n"
+        }) +
+        s"docker swarm leave -f"
 
       io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-stop.sh"))
     }
@@ -289,7 +309,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
     def buildDockerStack(multiTierModules : List[(plugin.TModuleDef, List[TempLocation])]) : Unit = {
       multiTierModules.foreach{ m =>
         val moduleName = m._1.moduleName
-        val moduleNetwork = plugin.toolbox.getNameDenominator(moduleName)
+        val moduleNetwork = Options.toolbox.getNameDenominator(moduleName)
         val CMD = //todo grep leader necess?
           s"""(docker node ls --filter "role=manager" --format "{{.Self}}" | grep "true") ${Options.errout}
              |if [ $$? -ne 0 ]; then

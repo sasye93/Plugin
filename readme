@@ -63,3 +63,20 @@ only primitives in calls
 
  >
  docker secrets, describe how works
+
+ services should not terminate in success cases (multitier.terminate)
+ ports in gateway angabe => merken dass nur ports innerhalb erkannt werden, z.b. gateway ports für http die ausserhalb geöffnet werden müssen explizit
+
+ beispoiele, case study beschreiben, how to run.
+ directory structure of ouput beschreiben
+
+ what one could do netxt:
+ - automatic Tools ip modification
+ - build helper for scaling`?
+
+ error connection is closing --> restart docker
+ multiple is not really necessary any more, or? actually only for dynamic stuff
+ one should work with optional ties where possible, fault tolerance!
+
+ overflow err: no circular dependencies also, eg in 2 start objects
+ - container vorteil: no need to worry about startup order, bec just redeploys when con fail

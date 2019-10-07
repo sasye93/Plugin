@@ -14,6 +14,9 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
 
   import ModuleConfig.{defaultModuleConfig => default}
 
+  def getAppName : String = Options.toolbox.getNameDenominator(getStringOfKey("app").getOrElse(default.appName))
+  def getDisabled : Boolean = getBooleanOfKey("disabled").getOrElse(false)
+
   def getCleanBuilds : Boolean = getBooleanOfKey("cleanBuilds").getOrElse(default.cleanBuilds)
   def getCleanups : Boolean = getBooleanOfKey("cleanup").getOrElse(default.cleanup)
   def getNoCache : Boolean = getBooleanOfKey("nocache").getOrElse(default.nocache)
@@ -40,6 +43,7 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
   def getGlobalDbIdentifier : Option[String] = getStringOfKey("globalDb").orElse(default.globalDb)
   def getGlobalDb : Option[String] = getGlobalDbIdentifier match{
     case Some("mongo") => Some("mongo:latest")
+    case Some("mysql") => Some("mysql:latest")
     case Some("none") => None
     case Some(db) => io.logger.warning(s"The option you supplied for globalDb in your module config is not supported and thus discarded: $db"); None //todo custom?
     case None => None
@@ -50,6 +54,8 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
 }
 object ModuleConfig{
   object defaultModuleConfig{
+    val getAppName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
+
     val cleanBuilds : Boolean = true
     val cleanup : Boolean =  true
     val nocache : Boolean =  false
@@ -58,6 +64,7 @@ object ModuleConfig{
 
     val stateful : Boolean =  false
 
+    val appName : String =  Options.swarmName //todo
     val dockerRepository : String = "plugin"
     val dockerHost : Option[String] = None
 

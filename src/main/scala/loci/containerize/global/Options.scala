@@ -13,6 +13,7 @@ package object Options {
   object toolbox{
     def getFormattedDateTimeString: String = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime)
     def toUnixString(p : Path): String = p.toString.replace("\\", "/")
+    def toUnixFile(s : String): String = s.replaceAll("\r\n", "\n").replaceAll("\r", "\n")
     def toInstanceClassName(obj : AnyRef) : String = obj.getClass.getName.stripSuffix("$")
     def getNameDenominator(s : String) : String = loci.container.Tools.getIpString(s)
   }
@@ -69,8 +70,8 @@ package object Options {
   /**
     * options and their default values.
     */
-  private var _swarmName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
-  def swarmName : String = toolbox.getNameDenominator(_swarmName)
+  @deprecated("1.0") private var _swarmName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
+  @deprecated("1.0") def swarmName : String = toolbox.getNameDenominator(_swarmName)
 
   @deprecated("1.0") var jar : Boolean = true
   var stage : Stage = compose

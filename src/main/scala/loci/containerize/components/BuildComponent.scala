@@ -52,7 +52,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         val tempDir : File = new File(Options.tempDir.toUri)
         if(tempDir == null || !tempDir.exists) return;
 
-        var Modules : TModuleList = tempDir.listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TSimpleModuleDef]())((L, mod) => {
+        var Modules : TModuleList = dependencyResolver filterDisabled tempDir.listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TSimpleModuleDef]())((L, mod) => {
           scala.util.Try{ L :+ io.deserialize[TSimpleModuleDef](mod.toPath).get }.getOrElse(L)
         }).map(mod => new TModuleDef(mod))
 
@@ -118,7 +118,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         }
 
         val locs : collection.mutable.Map[TModuleDef, List[TempLocation]] = collection.mutable.HashMap[TModuleDef, List[TempLocation]]()
-        val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + plugin.toolbox.getFormattedDateTimeString))
+        val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + Options.toolbox.getFormattedDateTimeString))
 
         def copy(module : TModuleDef, entryPoint : TEntryDef) : Unit = {
           import java.nio.file.StandardCopyOption._
@@ -211,7 +211,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           locs.foreach(l => composer.buildDockerCompose(l._1, l._2))
           t0 = System.nanoTime()
           logger.info(s"t7: ${(t0-t1)/1000000000}")
-          val stacks = locs.toList.map(_._1.moduleName)
+          val stacks = locs.toList.map(_._1)
           composer.buildDockerSwarm(stacks)
           t1 = System.nanoTime()
           logger.info(s"t8: ${(t1-t0)/1000000000}")

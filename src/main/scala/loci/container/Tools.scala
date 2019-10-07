@@ -2,7 +2,7 @@ package loci.container
 
 package object Tools extends AnyRef {
   final def resolveIp(c : Any) : String = getIpString(c.getClass.getTypeName)
-  final def publicIp : String = "0.0.0.0" //todo: doc only necessary when not standalone containers running, bec than we can iptabling
+  final def publicIp : String = "0.0.0.0"
   final def localhost : String = "127.0.0.1"
 
   final def globalDbIp(module : Any) : String = s"mongodb://${ resolveIp(module) }_globaldb" //todo mongo not hardcoded
@@ -33,7 +33,6 @@ package object Tools extends AnyRef {
   }
 
   private[loci] final def getIpString(s : String) : String = {
-    println(s)
     var ip = s.toLowerCase.replaceAll("\\$|\\.", "_")
     while(ip.takeRight(1).equals("_")) ip = ip.dropRight(1)
     ip

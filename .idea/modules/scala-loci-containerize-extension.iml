@@ -54,5 +54,6 @@
     <orderEntry type="library" name="sbt: org.mongodb:mongodb-driver-core:3.10.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.mongodb.scala:mongo-scala-bson_2.12:2.6.0:jar" level="project" />
     <orderEntry type="library" name="sbt: org.mongodb.scala:mongo-scala-driver_2.12:2.6.0:jar" level="project" />
+    <orderEntry type="library" name="scala-sdk-2.12.8" level="application" />
   </component>
 </module>

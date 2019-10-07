@@ -64,7 +64,7 @@ object ServiceImpl {
     //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
       case (m : ModuleDef) :: Nil =>
-        val mod = c.typecheck(m).asInstanceOf[ModuleDef] //todo note that this fails if declarations are made outside
+        val mod = c.typecheck(m).asInstanceOf[ModuleDef] //todo note that this fails if declarations are made outside, make try catch
         /**
          * extract macro arguments.
          */
@@ -89,7 +89,8 @@ object ServiceImpl {
          */
 
         c.info(c.enclosingPosition, showRaw(mod.impl.body), true);
-        val starts = mod.impl.body.flatMap(_.collect{
+        var containerEntryClass: String = mod.symbol.fullName
+        val allEndPoints = mod.impl.body.flatMap(_.collect{
           case a @ Apply(f, args)
             if{
               val result = scala.util.Try{ tpe(a).symbol.asMethod.fullName }
@@ -107,9 +108,8 @@ object ServiceImpl {
               s.qualifier.symbol.fullName + "." + (s.name.toString.split('$').last)
             }
 
-            var containerEntryClass: String = mod.symbol.fullName
             c.info(c.enclosingPosition, "s : " + showRaw(c.untypecheck(a).asInstanceOf[Apply]), true);
-            var containerPeerClass: String = args.collectFirst({
+            val containerPeerClass: String = args.collectFirst({
               case s @ Select(qual, TermName(methodName)) if s.tpe <:< c.typeOf[loci.runtime.Peer.Signature] => getNormalizedName(s)
             }).getOrElse("")
 
@@ -135,7 +135,6 @@ object ServiceImpl {
                       case a : Apply if (tpeType(a).resultType =:= c.typeOf[loci.language.Connections] && !a.exists({ case Select(_, TermName("and")) => true; case _ => false })) => a
                     }).flatMap{ a => *///these are single connections, and they include the other peer!
                       /*c.warning(c.enclosingPosition, "A: " + showRaw(a))
-                      //todo were here!!! currently only works for single connection.
                       //todo: is connect,listen,connectfirst the only methods?
                       val ap = a.asInstanceOf[Apply]
                       ap.collect({*/
@@ -144,8 +143,6 @@ object ServiceImpl {
                             val way = a2.fun match {
                               case s: Select => if(a2.args.exists(_.exists({ case Select(_,TermName("firstConnection")) => true; case _ => false}))) "both" else tpe(s).symbol.name.toString
                               case _ => "both"
-                              //todo problem is that connect can also listen with connectfirst.
-                              //todo currently, cons are added multiple times bec. of schachtelung
                             }
                             val conPeer = a2.args match {
                               case (s : Select) :: _ => getNormalizedName(s)
@@ -201,25 +198,31 @@ object ServiceImpl {
 
                     //body // :+ reify{ SimplifiedContainerEntryPoint(containerEntryClass, containerPeerClass, null, null, endPoints) } // todo config and script, refactor these classes to be applieable here, is hack now (bec direct use of constrcuctrro).
                     //c.abort(c.enclosingPosition, SimplifiedContainerEntryPoint(containerEntryClass, containerPeerClass, Paths.get(config).toFile, null, endPoints).toString)
-
-            /**
-             * save it.
-             *  */
-            val endpoint = SimplifiedContainerEntryPoint(containerEntryClass, containerPeerClass, config, endPoints, isGateway)
-            c.info(c.enclosingPosition, "ep : " + containerEntryClass + endpoint, true);
-
-            if(containerEntryClass.split('.').last.equalsIgnoreCase("globaldb")) c.warning(c.enclosingPosition, "The service name 'database' is reserved for automatically set up databases using the globalDb option, you should not use this as a service name, as this could result in conflicts.")
-            if(isGateway && endPoints.forall(_.way == "connect")) c.warning(c.enclosingPosition, "Seems like you don't listen for any connections within this service, consider annotating it with @service instead of @gateway.")
-
-            implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
-            val io = new IO()
-            io.createDir(Options.tempDir)
-            //if(!containerEntryClass.contentEquals(NoSymbol.fullName)) todo active
-              io.serialize(endpoint, Options.tempDir.resolve(containerEntryClass + ".ep"))
-            endpoint
+            (containerPeerClass, endPoints)
         })
-        if(starts.length > 1) c.warning(c.enclosingPosition, s"You have multiple start directives inside your @service/@gateway object, which is strongly discouraged for a Microservice.")
-        c.info(null, starts.length.toString, true)
+        if(allEndPoints.nonEmpty){
+          if(allEndPoints.length > 1) c.warning(c.enclosingPosition, s"You have multiple start directives inside your @service/@gateway object, which is strongly discouraged for Microservices. You should create an own service for each peer you start.")
+
+          /**
+           * save it.
+           *  */
+          val endpoints = allEndPoints.flatMap(_._2)
+          val endpoint = SimplifiedContainerEntryPoint(containerEntryClass, allEndPoints.head._1, config, endpoints, isGateway)
+          c.info(c.enclosingPosition, "ep : " + containerEntryClass + endpoint, true);
+
+          if(containerEntryClass.split('.').last.equalsIgnoreCase("globaldb")) c.warning(c.enclosingPosition, "The service name 'database' is reserved for automatically set up databases using the globalDb option, you should not use this as a service name, as this could result in conflicts.")
+          if(isGateway && endpoints.forall(_.way == "connect")) c.warning(c.enclosingPosition, "Seems like you don't listen for any connections within this service, consider annotating it with @service instead of @gateway.")
+
+          implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
+          val io = new IO()
+          io.createDir(Options.tempDir)
+          //if(!containerEntryClass.contentEquals(NoSymbol.fullName)) todo active
+          io.serialize(endpoint, Options.tempDir.resolve(containerEntryClass + ".ep"))
+        }
+        else{//todo is this really what we want, disallow everything else with not peers?
+          c.warning(c.enclosingPosition, "Couldn't find a multitier.start directive inside @service/@gateway object. It is either non-existent or cannot be detected by the containerization extension. Make sure you use compatible syntax. Service will be skipped and not deployed.")
+        }
+
         c.Expr[Any](m)
       case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.service must prepend a module object (object or case object).")
     }

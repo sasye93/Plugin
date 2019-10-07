@@ -48,7 +48,6 @@ class IO(implicit val logger : Logger) {
                 _ : SecurityException |
                 _ : IOException) => logger.error("Deserialization error: " + e.getMessage + s" (tried to serialize object from ${path}).")
       case e : Throwable => logger.error("Deserialization error: " + e.getMessage)
-      case e : java.lang.Throwable => logger.error("Deserialization error: " + e.getMessage)
     }
     finally{
     }
@@ -96,7 +95,7 @@ class IO(implicit val logger : Logger) {
         file.delete()
       file.createNewFile()
 
-      val con = if(unix) content.replaceAll("\r\n", "\n").replaceAll("\r", "\n") else content
+      val con = if(unix) Options.toolbox.toUnixFile(content) else content
 
       if(binary){
         os = new DataOutputStream(new FileOutputStream(file));
@@ -216,6 +215,7 @@ class IO(implicit val logger : Logger) {
     finally{
     }
   }
+  @deprecated("1.0")
   def listDependencies(repository : Path) : List[Path] = {
     val f : File = repository.toFile
     if(!f.exists)
@@ -229,8 +229,7 @@ class IO(implicit val logger : Logger) {
     else
       f.listFiles().flatMap(file => listDependencies(file.toPath)).toList
   }
-  def buildScript(CMD : String) : String  = "#!/bin/sh\n" + CMD.replaceAll("\\r\\n", "\n") //todo shall we support bat?
-
+  def buildScript(CMD : String) : String  = "#!/bin/sh\n" + Options.toolbox.toUnixFile(CMD)
 
   def resolvePath(p : Path)(implicit logger : Logger) : Option[File] = if(p != null) resolvePath(p) else None
   def resolvePath(p : String, homeDir : String = null)(implicit logger : Logger) : Option[File] = {
