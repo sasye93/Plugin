@@ -59,7 +59,7 @@ package object Options {
   val backupDir : String = "image-backups"
 
   private val os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
-  val errout : String = if(os == "windows") ">NUL 2>&1" else "> /dev/null 2>&1"
+  val errout : String = /*if(os == "windows") ">NUL 2>&1" else*/ "> /dev/null 2>&1"
 
   @deprecated("1.0")
   def osExt : String = "sh"

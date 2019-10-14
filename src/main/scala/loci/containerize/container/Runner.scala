@@ -16,7 +16,14 @@ import scala.sys.process._
 
 class Runner(logger : Logger) {
 //todo not working, dockerd seems not enough
-  def dockerIsRunning() : Boolean = Process(s"docker version").!(logger) == 0
+  def dockerIsRunning() : Boolean = Process(s"docker version").! == 0
+  def requirementsCheck() : Boolean = {
+    (Process("cmd /c bash -lc \"echo 0\"").! == 0) || {
+      (Process("cmd /c bash -lc \"echo 0\"").!(logger))
+      logger.error("Couldn't find bash command. This is probably due to missing bash shell support. Make sure you have a bash interpreter (e.g. cygwin64) installed.")
+      false
+    }
+  }
   def dockerRun() : Boolean = {
     if(dockerIsRunning()) {
       logger.info(s"Docker running, version ${Process("docker version --format '{{.Server.Version}}'").!!}")
@@ -31,7 +38,7 @@ class Runner(logger : Logger) {
     //todo see doc
     logger.info("Starting docker deamon, this can take a while...")
     Process("dockerd").!(logger) == 0 || {
-      logger.error("Could not start docker deamon. Please start it manually and try again.")
+      logger.error("Could not start docker deamon. Do you have Docker installed? Please start it manually and try again.")
       false
     }
   }
@@ -46,7 +53,7 @@ class Runner(logger : Logger) {
   }
   def dockerLogin(username : String = Options.dockerUsername, password : String = Options.dockerPassword, host : String = Options.dockerHost) : Unit = {
     //todo pw sec
-    if((Process("echo \"" + password + "\"") #| Process(s"docker login --username $username --password-stdin $host")).!(logger.weak) != 0){
+    if((Process("cmd /c echo " + password + "") #| Process(s"docker login --username $username --password-stdin $host")).!(logger.weak) != 0){
       logger.error(s"Login failed for ${ if(host == "") "DockerHub" else host }, please check you supplied the correct credentials via -P:loci.containerize:username=XXX and -P:loci.containerize:password=XXX")
     }
   }

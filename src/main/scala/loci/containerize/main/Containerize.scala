@@ -90,7 +90,7 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
 
   override def init(options: List[String], error: String => Unit): Boolean = {
     processOptions(options, error)
-    if(runner.dockerRun()){
+    if(runner.dockerRun() && runner.requirementsCheck()){
       runner.dockerCleanup()
       runner.dockerLogin()
 

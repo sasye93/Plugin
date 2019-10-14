@@ -222,7 +222,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
       val CMD = //todo grep leader necess?
        s"""(docker node ls | grep "Leader") ${Options.errout}
            |if [ $$? -ne 0 ]; then
-           |  docker swarm init
+           |  docker swarm init --advertise-addr eth0
            |fi
            |""".stripMargin +
       multiTierModules.map(_.config.getAppName).toSet.foldLeft("")((N, appName) => {
@@ -283,6 +283,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
            |echo "----------------------------------"
            |docker service ls
            |echo "--------------------------"
+           |echo "Swarm initialization done. Note that you might have to forward ports to your machine to make them accessable if you run Docker inside a VM (e.g. toolbox)."
            |echo ">> PRESS ANY KEY TO CONTINUE / CLOSE <<"
            |read -n 1 -s
            |exit 0
@@ -361,12 +362,12 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                  |fi
                  |echo "----------------- end of service error output --------------------------"
                  |""".stripMargin
-          })
+          }) + "echo \"Note: This script will only show running services, to show the error logs of failed services, use docker service/container ls -a to get the respective ip and then docker service/container logs <ID> and docker ps --filter \'id=<ID>\'\"."
         io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, s"check-${ m._1.moduleName }.sh"))
       }
     }
     def runDockerSwarm() : Unit = {
-      Process("bash swarm-init.sh", composePath).!!(logger.strong) //todo really make this blocking?
+      Process("cmd /k start bash swarm-init.sh", composePath).run() //todo really make this blocking?
       //orig call: cmd /k start bash swarm-init.sh
     }
     //$ docker service rm my-nginx
