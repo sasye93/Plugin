@@ -1,18 +1,22 @@
-package loci.containerize.IO
+/**
+  * IO class, provides read/write capabilities.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.IO
 
 import java.io.{BufferedReader, BufferedWriter, DataInputStream, DataOutputStream, File, FileInputStream, FileOutputStream, FileReader, FileWriter, IOException, InputStreamReader, ObjectInputStream, ObjectOutputStream, OutputStreamWriter}
 import java.nio.CharBuffer
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{CopyOption, FileAlreadyExistsException, Files, Path, Paths}
 
-import loci.containerize.{Check, Options}
-import loci.containerize.main.Containerize
-import loci.containerize.types.{Pickle, TempLocation}
+import loci.impl.{Check, Options}
+import loci.impl.main.Containerize
+import loci.impl.types.{Pickle, TempLocation}
 
 import scala.io.{BufferedSource, Source}
 import upickle.default._
 
-//todo try catch
 class IO(implicit val logger : Logger) {
 
   def serialize[T <: Pickle](obj : Pickle, path : Path) : Unit = {

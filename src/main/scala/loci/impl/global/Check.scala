@@ -1,4 +1,4 @@
-package loci.containerize
+package loci.impl
 
 package object Check {
   def !(testForNull : Any) : Boolean = testForNull == null

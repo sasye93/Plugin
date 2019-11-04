@@ -1,17 +1,9 @@
-package loci.containerize.types
+package loci.impl.types
 
-import java.nio.file.{Path, Paths}
-import java.io.File
-
-import loci.containerize.Options
-import loci.containerize.Check
-import loci.containerize.IO.Logger
-import loci.containerize.main.Containerize
+import java.nio.file.Paths
+import loci.impl.main.Containerize
 
 import upickle.default.{ReadWriter => RW, _}
-import scala.annotation.meta.{getter, setter}
-import scala.collection.mutable
-import scala.tools.nsc.Global
 
 sealed trait Pickle
 object Pickle {

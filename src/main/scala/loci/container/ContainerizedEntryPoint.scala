@@ -1,3 +1,0 @@
-package loci.container
-
-trait ContainerizedEntryPoint

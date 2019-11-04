@@ -1,11 +1,14 @@
-package loci.containerize.types
+/**
+  * Temp location class, serves as a wrapper for generated images.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.types
 
 import java.io.File
 import java.nio.file.{Path, Paths}
 
-import loci.containerize.Options
-
-import scala.annotation.meta.{getter, setter}
+import loci.impl.Options
 
 case class TempLocation(classSymbol : String, private val tempPath : Path, entryPoint : ContainerEntryPoint){
   def getImageName : String = loci.container.Tools.getIpString(classSymbol)

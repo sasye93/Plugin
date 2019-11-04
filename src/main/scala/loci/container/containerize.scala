@@ -1,10 +1,8 @@
 package loci.container
 
-import java.nio.file.Paths
-
-import loci.containerize.IO.{IO, Logger}
-import loci.containerize.Options
-import loci.containerize.types.{SimplifiedContainerEntryPoint, SimplifiedContainerModule, SimplifiedPeerDefinition}
+import loci.impl.IO.{IO, Logger}
+import loci.impl.Options
+import loci.impl.types.{SimplifiedContainerModule, SimplifiedPeerDefinition}
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
@@ -36,8 +34,8 @@ object ContainerizeImpl {
       case (m : ModuleDef) :: Nil =>
 
         /**
-         * extract macro arguments.
-         */
+          * extract macro arguments.
+          */
         val config : Option[String] = (c.prefix.tree match {
           case q"new $s(config=$p)" if p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
           case q"new $s($p)" if p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
@@ -47,28 +45,28 @@ object ContainerizeImpl {
         })
 
         m.impl match{
-        case Template(parents, self, body) =>
-          c.info(null, "this is it : " + showRaw(body), true)
-          val mod = tpe(m).asInstanceOf[c.Tree]
-          val peers : List[SimplifiedPeerDefinition] =
-          mod.symbol.typeSignature.members.collect({
-            case m : Symbol if(m.isType &&
-                ( m.annotations.exists(_.tree.tpe =:= c.typeOf[loci.peer]) || //If @peer has not yet been processed.
-                  m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer]))  //If @peer has already been processed.
-              ) => SimplifiedPeerDefinition(tpe(mod).symbol.fullName + "." + m.name.toString)
-          }).toList
-          c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.className).toString, true)
-          /**
-           * save it.
-           *  */
-          implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
-          val io = new IO()
-          io.createDir(Options.tempDir)
-          //if(!mod.symbol.contentEquals(NoSymbol.fullName)) todo active
-          io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers, config), Options.tempDir.resolve(mod.symbol.fullName + ".mod"))
+          case Template(parents, self, body) =>
+            c.info(null, "this is it : " + showRaw(body), true)
+            val mod = tpe(m).asInstanceOf[c.Tree]
+            val peers : List[SimplifiedPeerDefinition] =
+              mod.symbol.typeSignature.members.collect({
+                case m : Symbol if(m.isType &&
+                  ( m.annotations.exists(_.tree.tpe =:= c.typeOf[loci.peer]) || //If @peer has not yet been processed.
+                    m.typeSignature.baseClasses.exists(_.typeSignature <:< c.typeOf[loci.language.impl.Peer]))  //If @peer has already been processed.
+                  ) => SimplifiedPeerDefinition(tpe(mod).symbol.fullName + "." + m.name.toString)
+              }).toList
+            c.info(c.enclosingPosition, "peers: " + peers.map(mod.symbol.fullName + "." + _.className).toString, true)
+            /**
+              * save it.
+              *  */
+            implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
+            val io = new IO()
+            io.createDir(Options.tempDir)
+            //if(!mod.symbol.contentEquals(NoSymbol.fullName)) todo active
+            io.serialize(new SimplifiedContainerModule(mod.symbol.fullName, peers, config), Options.tempDir.resolve(mod.symbol.fullName + ".mod"))
 
-          /**
-          if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
+            /**
+            if(c.symbol.isModuleOrModuleClass && hasContainerizationAnnot(c.symbol)){
             getPeers(c).foreach{ p =>
               logger.warning("P : " + p)
               PeerDefs += new TAbstractClassDef(
@@ -80,9 +78,9 @@ object ContainerizeImpl {
               )
             }
           }
-           */
-          /**
-          val p = {
+              */
+            /**
+            val p = {
             if (!parents.exists({
               case Ident(c) => c match {
                 case TypeName(n) => n == "ContainerizedModule"
@@ -94,9 +92,9 @@ object ContainerizeImpl {
             else
               parents
           }
-           */
-          c.Expr[Any](m)
-      }
+              */
+            c.Expr[Any](m)
+        }
       case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.containerize must prepend a module object (object or case object).")
     }
 

@@ -1,16 +1,18 @@
-package loci.containerize.types
+/**
+  * Config class, the common superclass of container and module configs.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.types
 
 import java.io.File
-import java.nio.file.{Files, Path, Paths}
-
-import akka.http.scaladsl.server.util.Tuple
 
 import scala.util.Try
 import scala.util.parsing.json.JSON
-import loci.containerize.main.Containerize
-import loci.containerize.Options
-import loci.containerize.Check
-import loci.containerize.IO._
+import loci.impl.main.Containerize
+import loci.impl.Options
+import loci.impl.Check
+import loci.impl.IO._
 
 abstract class Config(json : Option[String], homeDir : Option[String] = None)(implicit io : IO, implicit private val plugin : Containerize) {
 
@@ -30,10 +32,7 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
       else StringContext.processEscapes(json.get).stripMargin
     }
     else {
-      Options.getSetupConfig(plugin.logger) match {
-        case Some(f) => io.readFromFile(f)
-        case None => ContainerConfig.defaultContainerConfig.JSON
-      }
+      ContainerConfig.defaultContainerConfig.JSON
     }
   }
   protected val config : String = loadConfig()
@@ -41,7 +40,7 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
 
   protected val map: Map[String, Any] = parsed match {
     case Some(e: Map[String, Any]) => e
-    case None => plugin.logger.error(s"Parsing JSON config for entry point failed, ${if (Check ? config) ": " + config.toString + ". Not a valid JSON document?" else "default options seem to be broke (internal failure). Please supply a manual config file with @config."}"); null
+    case _ => plugin.logger.error(s"Parsing JSON config for entry point failed, ${if (Check ? config) ": " + config.toString + ". Not a valid JSON document?" else "default options seem to be broke (internal failure). Please supply a manual config file with @config."}"); null
   }
 
   {

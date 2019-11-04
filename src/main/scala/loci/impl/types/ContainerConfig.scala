@@ -1,14 +1,13 @@
-package loci.containerize.types
+/**
+  * Container config class, config for @service.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.types
 
-import java.io.File
-import java.nio.file.{Path,Paths}
-
-import loci.containerize.IO.{IO, Logger}
-import loci.containerize.{Check, Options}
-import loci.containerize.main.Containerize
-
-import scala.util.Try
-import scala.util.parsing.json.JSON
+import loci.impl.IO.IO
+import loci.impl.Options
+import loci.impl.main.Containerize
 
 class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig])(implicit io : IO, implicit private val plugin : Containerize) extends Config(json, {
   if(moduleConfig.isDefined) moduleConfig.get.getHome else None

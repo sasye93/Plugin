@@ -1,23 +1,20 @@
+/**
+  * Implementation of the @service annotation.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
 package loci.container
-
-import java.io.File
-import java.nio.file.{Path, Paths}
-import java.time.LocalDateTime
 
 import loci.Instance
 import loci.container._
-import loci.containerize.IO.Logger
-import loci.containerize.types.{SimplifiedConnectionEndPoint, SimplifiedContainerEntryPoint, SimplifiedContainerModule}
+import loci.impl.IO.Logger
+import loci.impl.types.{SimplifiedConnectionEndPoint, SimplifiedContainerEntryPoint, SimplifiedContainerModule}
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
-import scala.tools.reflect.ToolBox
-import scala.reflect.runtime
-import loci.container.Tools
-import loci.container.Tools.getIpString
-import loci.containerize.Options
-import loci.containerize.IO.IO
+import loci.impl.Options
+import loci.impl.IO.IO
 
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class service(config: String = "") extends StaticAnnotation {
@@ -63,24 +60,24 @@ object ServiceImpl {
 
     //todo this will only hit for module, class?
     annottees.map(_.tree).toList match {
-      case (m : ModuleDef) :: Nil =>
-        val mod = c.typecheck(m).asInstanceOf[ModuleDef] //todo note that this fails if declarations are made outside, make try catch
+      case (module : ModuleDef) :: Nil =>
+        val mod = c.typecheck(module).asInstanceOf[ModuleDef] //todo note that this fails if declarations are made outside, make try catch
         /**
          * extract macro arguments.
          */
         def eq(p : String) : Boolean = (p.equalsIgnoreCase("service") || p.equalsIgnoreCase("gateway"))
-        val config : Option[String] = (c.prefix.tree match {
+        val config : Option[String] = c.prefix.tree match {
             case q"new $s(config=$p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => c.info(c.enclosingPosition, "1 : " + p.toString(), true);Some(p.toString.stripPrefix("\"").stripSuffix("\""))
             case q"new $s($p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => c.info(c.enclosingPosition, "2 : " + p.toString() + ":" + eval[String](p.asInstanceOf[tc.typeContext.Tree]), true);Some(p.toString.stripPrefix("\"").stripSuffix("\""))
             case q"new $s($p)" if eq(s.toString) => if(p.nonEmpty) c.warning(c.enclosingPosition, s"Did not recognize config provided, : $p"); None
             case q"new $s" => None
             case _ => c.abort(c.enclosingPosition, "Invalid @service annotation style. Use '@service(path : String = \"\"), e.g. @service(\"scripts/mycfg.xml\") or without parameter.")
-          })
+          }
 
-        val isGateway : Boolean = (c.prefix.tree match {
+        val isGateway : Boolean = c.prefix.tree match {
           case q"new $s" => s.toString.startsWith("gateway")
           case _ => false
-        })
+        }
 
         /*
         m.impl.body.foreach(_.find( x =>
@@ -88,7 +85,6 @@ object ServiceImpl {
         ).foreach(x => c.info(c.enclosingPosition, (tpe(x).symbol + ":" + tpe(x).tpe).toString(), true)))
          */
 
-        c.info(c.enclosingPosition, showRaw(mod.impl.body), true);
         var containerEntryClass: String = mod.symbol.fullName
         val allEndPoints = mod.impl.body.flatMap(_.collect{
           case a @ Apply(f, args)
@@ -108,16 +104,12 @@ object ServiceImpl {
               s.qualifier.symbol.fullName + "." + (s.name.toString.split('$').last)
             }
 
-            c.info(c.enclosingPosition, "s : " + showRaw(c.untypecheck(a).asInstanceOf[Apply]), true);
             val containerPeerClass: String = args.collectFirst({
-              case s @ Select(qual, TermName(methodName)) if s.tpe <:< c.typeOf[loci.runtime.Peer.Signature] => getNormalizedName(s)
+              case s @ Select(_, TermName(_)) if s.tpe <:< c.typeOf[loci.runtime.Peer.Signature] => getNormalizedName(s)
             }).getOrElse("")
 
-            c.info(c.enclosingPosition, "aainstac : " + containerPeerClass, true);
-
-            c.info(c.enclosingPosition, "apply : " + showRaw(a.symbol.owner), true);
             val endPoints : List[SimplifiedConnectionEndPoint] = args.foldLeft(List[SimplifiedConnectionEndPoint]())((B, a) => B ++ a.filter({
-              case a@Apply(_f, _args)
+              case a : Apply
               => ((tpeType(a) weak_<:< c.typeOf[loci.language.Connections]) && !a.exists({ case Select(_, TermName("and")) => true; case _ => false }))
               case _ => false
             }).collect(
@@ -139,7 +131,7 @@ object ServiceImpl {
                       val ap = a.asInstanceOf[Apply]
                       ap.collect({*/
                         case a2: Apply => a2.collect({
-                          case _a@Apply(___fun, ___args) if tpeType(_a).erasure weak_<:< c.weakTypeOf[loci.communicator.ConnectionSetup[loci.communicator.ProtocolCommon]].erasure => c.info(c.enclosingPosition, "that app" + showRaw(a2), true);
+                          case _a@Apply(_, ___args) if tpeType(_a).erasure weak_<:< c.weakTypeOf[loci.communicator.ConnectionSetup[loci.communicator.ProtocolCommon]].erasure => c.info(c.enclosingPosition, "that app" + showRaw(a2), true);
                             val way = a2.fun match {
                               case s: Select => if(a2.args.exists(_.exists({ case Select(_,TermName("firstConnection")) => true; case _ => false}))) "both" else tpe(s).symbol.name.toString
                               case _ => "both"
@@ -148,7 +140,6 @@ object ServiceImpl {
                               case (s : Select) :: _ => getNormalizedName(s)
                               case _ => "unknown"
                             }
-                            c.info(c.enclosingPosition, "a : " + c.typeOf[loci.peer].typeSymbol.typeSignature, true);
                             def hostWarning() : Unit = c.warning(c.enclosingPosition, "Services will not be reachable if they listen on localhost, or if they try to connect to localhost. Use Tools.publicIp or '0.0.0.0' in a listen statement, and Tools.resolveIp(entryPoint : @service/@gateway object) when connecting.")
                             SimplifiedConnectionEndPoint(
                               conPeer,
@@ -159,22 +150,23 @@ object ServiceImpl {
                               {
                                 val host = ___args.collectFirst({
                                   case Literal(Constant(host: String)) => Some(host)
-                                  case s : Select => eval[String](s)
+                                  case s : Select => None
                                   case a : Apply =>
-                                    eval[String](a).orElse(a match{
+                                    a match{
                                       case ap : Apply => tpe(ap).symbol.fullName match{
                                         case `resolveIpSig` => Some(ap.args.head.symbol.fullName)
-                                        case `localhostSig` => Some(Tools.localhost)
+                                        case `localhostSig` => None
                                         case _ => None
                                       }
                                       case _ => None
-                                    })
+                                    }
+                                  case _ => None
                                 }).flatten.getOrElse(Tools.localhost)
                                 if(host == "" || host == "localhost" || host == "127.0.0.1") hostWarning()
                                 host
-                              }, //todo
+                              },
                               way,
-                              "1.0",
+                              "1.0", //not in use.
                               /*{
                                   val tp = tpeType(a)
                                   c.info(c.enclosingPosition, tp.toString, true);
@@ -208,7 +200,6 @@ object ServiceImpl {
            *  */
           val endpoints = allEndPoints.flatMap(_._2)
           val endpoint = SimplifiedContainerEntryPoint(containerEntryClass, allEndPoints.head._1, config, endpoints, isGateway)
-          c.info(c.enclosingPosition, "ep : " + containerEntryClass + endpoint, true);
 
           if(containerEntryClass.split('.').last.equalsIgnoreCase("globaldb")) c.warning(c.enclosingPosition, "The service name 'database' is reserved for automatically set up databases using the globalDb option, you should not use this as a service name, as this could result in conflicts.")
           if(isGateway && endpoints.forall(_.way == "connect")) c.warning(c.enclosingPosition, "Seems like you don't listen for any connections within this service, consider annotating it with @service instead of @gateway.")
@@ -216,14 +207,14 @@ object ServiceImpl {
           implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
           val io = new IO()
           io.createDir(Options.tempDir)
-          //if(!containerEntryClass.contentEquals(NoSymbol.fullName)) todo active
-          io.serialize(endpoint, Options.tempDir.resolve(containerEntryClass + ".ep"))
+          if(!containerEntryClass.contentEquals(NoSymbol.fullName))
+            io.serialize(endpoint, Options.tempDir.resolve(containerEntryClass + ".ep"))
         }
         else{//todo is this really what we want, disallow everything else with not peers?
           c.warning(c.enclosingPosition, "Couldn't find a multitier.start directive inside @service/@gateway object. It is either non-existent or cannot be detected by the containerization extension. Make sure you use compatible syntax. Service will be skipped and not deployed.")
         }
 
-        c.Expr[Any](m)
+        c.Expr[Any](module)
       case _ => c.abort(c.enclosingPosition, "Invalid annotation: @loci.service must prepend a module object (object or case object).")
     }
   }

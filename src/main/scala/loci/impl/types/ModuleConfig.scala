@@ -1,14 +1,13 @@
-package loci.containerize.types
+/**
+  * Module config class, config for @containerize.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.types
 
-import java.io.File
-import java.nio.file.{Files, Path, Paths}
-
-import scala.util.Try
-import scala.util.parsing.json.JSON
-import loci.containerize.main.Containerize
-import loci.containerize.Options
-import loci.containerize.Check
-import loci.containerize.IO.IO
+import loci.impl.main.Containerize
+import loci.impl.Options
+import loci.impl.IO.IO
 
 class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val plugin : Containerize) extends Config(json)(io, plugin) {
 
@@ -17,16 +16,7 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
   def getAppName : String = Options.toolbox.getNameDenominator(getStringOfKey("app").getOrElse(default.appName))
   def getDisabled : Boolean = getBooleanOfKey("disabled").getOrElse(false)
 
-  def getCleanBuilds : Boolean = getBooleanOfKey("cleanBuilds").getOrElse(default.cleanBuilds)
-  def getCleanups : Boolean = getBooleanOfKey("cleanup").getOrElse(default.cleanup)
-  def getNoCache : Boolean = getBooleanOfKey("nocache").getOrElse(default.nocache)
-  def getSaveImages : Boolean = getBooleanOfKey("saveImages").getOrElse(default.saveImages)
-  def getShowInfos : Boolean = getBooleanOfKey("showInfos").getOrElse(default.showInfos)
-
   def getStateful : Boolean = getBooleanOfKey("stateful").getOrElse(default.stateful)
-
-  def getDockerRepository : String = getStringOfKey("dockerRepository").getOrElse(default.dockerRepository)
-  def getDockerHost : Option[String] = getStringOfKey("dockerHost").orElse(default.dockerHost)
 
   def getContainerVolumeStorage : String = getStringOfKey("containerVolumeStorage").getOrElse(default.containerVolumeStorage)
 
@@ -54,19 +44,10 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
 }
 object ModuleConfig{
   object defaultModuleConfig{
-    val getAppName : String = "Containerized_ScalaLoci_Project" //todo darf auch dann keine - etc beinhalten
-
-    val cleanBuilds : Boolean = true
-    val cleanup : Boolean =  true
-    val nocache : Boolean =  false
-    val saveImages : Boolean =  false
-    val showInfos : Boolean =  true
 
     val stateful : Boolean =  false
 
-    val appName : String =  Options.swarmName //todo
-    val dockerRepository : String = "plugin"
-    val dockerHost : Option[String] = None
+    val appName : String =  Options.swarmName
 
     val jreBaseImage : String = "jre" //"jre-alpine"
     val globalDb : Option[String] = None //todo: everything else, starting db, persistent /data storage, etc.
@@ -77,20 +58,10 @@ object ModuleConfig{
     val JSON : String = {
       s"""{
          |  "stateful": $stateful,
-         |  "cleanBuilds": $cleanBuilds,
-         |  "cleanup": $cleanup,
-         |  "nocache": $nocache,
-         |  "saveImages": $saveImages,
-         |  "showInfos": $showInfos,
-         |  "dockerRepository": "$dockerRepository",
          |  "jreBaseImage": "$jreBaseImage",
          |  "containerVolumeStorage": "$containerVolumeStorage"
          |}""".stripMargin
     }//todo "plugin" replace, maybe just with _
-    
-/**
-    var dockerUsername : String = "sasye93"
-    var dockerPassword : String = "Jana101997"
-*/
+
   }
 }

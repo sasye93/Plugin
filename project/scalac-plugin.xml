@@ -1,4 +1,4 @@
 <plugin>
     <name>containerize</name>
-    <classname>loci.containerize.main.Containerize</classname>
+    <classname>loci.impl.main.Containerize</classname>
 </plugin>

@@ -1,12 +1,12 @@
-package loci.containerize.AST
+/**
+  * Checks validity of dependencies and macro usages.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.AST
 
 import java.nio.file.{Path, Paths}
-
-import loci.containerize.main.Containerize
-import loci.containerize.types.SimplifiedContainerEntryPoint
-
-import scala.collection.immutable.HashMap
-import scala.tools.nsc.Global
+import loci.impl.main.Containerize
 
 class DependencyResolver(implicit val plugin : Containerize) {
 
@@ -19,6 +19,7 @@ class DependencyResolver(implicit val plugin : Containerize) {
   def getAssocEntryPointsOfPeer(entryPoints : TEntryList, p : TPeerDef) : TEntryList = {
     entryPoints.filter(e => e.peerClassSymbolString == p.className)
   }
+  @deprecated("1.0")
   def getAssocEntryPointsOfClassSymbol(entryPoints : TEntryPointMap, c : ClassSymbol) : List[ClassSymbol] = {
     entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.peerClassSymbolString.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.peerClassSymbolString.asInstanceOf[plugin.global.ClassSymbol])
   }
@@ -32,18 +33,12 @@ class DependencyResolver(implicit val plugin : Containerize) {
   def filterDisabled(modules : TModuleList) : TModuleList = modules.filterNot(_.config.getDisabled)
   private def filterInvalid(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => !(e.peerClassSymbolString.isEmpty || e.entryClassSymbolString.isEmpty)), peerDefs)
   private def filterInvalidPeerRefs(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => peerDefs.exists(p => e.peerClassSymbolString == p.className)), peerDefs)
-  //todo test
-  //this is not used atm (check if every peer in module has entry point), because it is probably not desirable.
+  //this does nothing atm (check if every peer in module has entry point), because it is probably not desirable.
   private def checkPeerRefCompleteness(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = {
     (
       entryPoints,
       peerDefs
     )
-  }
-
-  private def checkModuleEmptyness(entryPoints : TEntryPointMap) : TEntryPointMap = {
-    //todo: check that multitier containerize is not empty regard peers + use this
-    entryPoints
   }
 
   //todo include ext?... make option switch //todo excluding java home really ok? ext libs here are unique!

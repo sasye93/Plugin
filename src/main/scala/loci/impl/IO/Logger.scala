@@ -1,4 +1,9 @@
-package loci.containerize.IO
+/**
+  * Logger class.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.IO
 
 import scala.reflect.internal.util.Position
 import scala.sys.process.ProcessLogger
@@ -12,7 +17,7 @@ class Logger(reporter : Reporter) extends ProcessLogger {
 
   def error(s : String, pos : Position = null): Unit = reporter.error(pos, s"Containerize: $s")
   def warning(s : String, pos : Position = null): Unit = reporter.warning(pos, s"Containerize: $s")
-  def info(s : String, pos : Position = null): Unit = if(loci.containerize.Options.showInfos) reporter.info(pos, s"Containerize: $s", force = true)
+  def info(s : String, pos : Position = null): Unit = if(loci.impl.Options.showInfos) reporter.info(pos, s"Containerize: $s", force = true)
 
   object strong extends ProcessLogger{
     override def err(s: => String): Unit = error("An error occurred while trying to execute a process command: " + s)

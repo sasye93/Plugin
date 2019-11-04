@@ -1,21 +1,22 @@
-package loci.containerize.components
+/**
+  * Build phase, where output (images, etc.) is generated.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.components
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io._
 import java.nio.file.{Files, Path, Paths}
-import java.util.Calendar
 
-import loci.containerize.AST.DependencyResolver
-import loci.containerize.IO.IO
-import loci.containerize.main.Containerize
-import loci.containerize.types.TempLocation
+import loci.impl.main.Containerize
+import loci.impl.types.TempLocation
 
 import scala.tools.nsc.plugins.PluginComponent
 import scala.reflect.internal.Phase
-import scala.reflect.io.AbstractFile
 import scala.tools.nsc.Global
-import loci.containerize.Options
-import loci.containerize.container._
+import loci.impl.Options
+import loci.impl.container._
 
 class BuildComponent(implicit val plugin : Containerize) extends PluginComponent{
 
@@ -24,7 +25,6 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
 
   import plugin._
   import global._
-  //type TAbstractClassDef = AbstractClassDef[plugin.global.Type, plugin.global.TypeName, plugin.global.Symbol]
 
   val component: PluginComponent = this
 
@@ -41,25 +41,25 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
     val executed : AtomicBoolean = new AtomicBoolean()
 
     def apply(unit: CompilationUnit) : Unit ={
-      var s1 = System.nanoTime()
 
       if(executed.compareAndSet(false, true)) {
-        reporter.warning(null, "CALL END")
 
+        if(!runner.dockerIsRunning()) return;
+        logger.info("Starting build stage...")
         /**
          * load analyzed peer and module data.
          */
         val tempDir : File = new File(Options.tempDir.toUri)
         if(tempDir == null || !tempDir.exists) return;
 
-        var Modules : TModuleList = dependencyResolver filterDisabled tempDir.listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TSimpleModuleDef]())((L, mod) => {
+        val Modules : TModuleList = dependencyResolver filterDisabled tempDir.listFiles((f) => f.getName.endsWith(".mod")).foldLeft(List[TSimpleModuleDef]())((L, mod) => {
           scala.util.Try{ L :+ io.deserialize[TSimpleModuleDef](mod.toPath).get }.getOrElse(L)
         }).map(mod => new TModuleDef(mod))
 
         Options.containerize = Modules.nonEmpty
         if(!Options.containerize) return;
 
-        var EntryPoints : TEntryList = tempDir.listFiles((f) => f.getName.endsWith(".ep")).foldLeft(List[TSimpleEntryDef]())((L, ep) => {
+        var EntryPoints : TEntryList = tempDir.listFiles(f => f.getName.endsWith(".ep")).foldLeft(List[TSimpleEntryDef]())((L, ep) => {
           scala.util.Try{ L :+ io.deserialize[TSimpleEntryDef](ep.toPath).get }.getOrElse(L)
         }).map(ep => new TEntryDef(ep, dependencyResolver.getModuleOfEntryPoint(ep, Modules)))
 
@@ -67,17 +67,15 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
 
         plugin.dependencyResolver.dependencies(EntryPoints, Peers) match{ case (a,b) => EntryPoints = a; Peers = b; }
 
-        io.recursiveClearDirectory(Options.tempDir.toFile, true)
-        logger.info("a1" + EntryPoints.toString)
-        logger.info("a2" + Modules.toString)
-
+        //io.recursiveClearDirectory(Options.tempDir.toFile, true) todo enable
+/*
         def pathify(aClass : TAbstractClassDef) : TAbstractClassDef = {
           val classFile : AbstractFile = global.genBCode.postProcessorFrontendAccess.backendClassPath.findClassFile(aClass.classSymbol.javaClassName).orNull
           if(classFile == null) reporter.warning(null, s"output file for class not found: ${ aClass.classSymbol.javaClassName }")
 
           aClass.copy(outputPath = Some(global.genBCode.postProcessorFrontendAccess.compilerSettings.outputDirectory(classFile).file), filePath = Some(classFile))
         }
-
+*/
         //PeerDefs = PeerDefs.map(pathify)
 
 
@@ -110,9 +108,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
 
         //reporter.warning(null, global.genBCode.postProcessorFrontendAccess.getEntryPoints.toString)
 
-        logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.homeDir.listFiles().foldLeft("")((b, s) => b + s.getName))
         if(Options.cleanBuilds){
-          logger.warning("BUsssssssssssssssssssssssssssssssssssssssssss " + plugin.homeDir.listFiles().toString)
           //io.recursiveClearDirectory(plugin.containerDir)
           io.recursiveClearDirectory(plugin.homeDir)
         }
@@ -121,7 +117,6 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         val buildPath = Files.createDirectory(Paths.get(plugin.homeDir.getAbsolutePath, Options.dirPrefix + Options.toolbox.getFormattedDateTimeString))
 
         def copy(module : TModuleDef, entryPoint : TEntryDef) : Unit = {
-          import java.nio.file.StandardCopyOption._
           val s : Path = Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, module.getLocDenominator, entryPoint.getLocDenominator)
           io.createDirRecursively(s) match{
             case Some(d) =>
@@ -169,70 +164,58 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
         val builder = new Builder(plugin.io).getBuilder(locs.toMap, buildPath.toFile)
         val composer = new Compose(plugin.io)(buildPath.toFile).getComposer
 
-        var t0 = System.nanoTime()
-        logger.info(s"first: ${(t0-s1)/1000000000}")
         //plugin.classPath.asClassPathString
+        logger.info("Collect libraries and dependencies...")
         builder.collectLibraryDependencies(buildPath)
+        logger.info("Build JAR files from ScalaLoci peers...")
         builder.buildJARS()
+        logger.info("Build run scripts...")
         builder.buildCMDExec()
+        logger.info("Build Dockerfiles...")
         builder.buildDockerFiles()
-        builder.createReadme(buildPath)
-        var t1 = System.nanoTime()
-
-        logger.info(s"t1: ${(t1-t0)/1000000000}")
+        //builder.createReadme(buildPath)
 
         if(Options.stage >= Options.image){
+          logger.info("Build scripts for base image...")
           builder.buildDockerBaseImageBuildScripts()
-          t0 = System.nanoTime()
-          logger.info(s"t2: ${(t0-t1)/1000000000}")
+          logger.info("Build scripts for peer images...")
           builder.buildDockerImageBuildScripts()
-          t1 = System.nanoTime()
-          logger.info(s"t3: ${(t1-t0)/1000000000}")
+          logger.info("Build image run scripts...")
           builder.buildDockerRunScripts()
-          t0 = System.nanoTime()
-          logger.info(s"t4: ${(t0-t1)/1000000000}")
+          logger.info("Build global databases, if applicable...")
           builder.buildGlobalDatabase(Modules.map(mod => (Paths.get(buildPath.toAbsolutePath.toString, Options.containerDir, mod.getLocDenominator), mod)))
+          logger.info("Build peer images...")
           builder.buildDockerImages()
-          t1 = System.nanoTime()
-          logger.info(s"t5: ${(t1-t0)/1000000000}")
-          if(Options.saveImages)
+          if(Options.saveImages){
+            logger.info("Save backups of images (this may take very long)...")
             builder.saveImageBackups()
-          t0 = System.nanoTime()
-          logger.info(s"t5: ${(t0-t1)/1000000000}")
+          }
+
           //runner.runLandscape(locs)
         }
         if(Options.stage >= Options.publish) {
-          /**builder.publishDockerImagesToRepo()*/ //todo uncomment make this different, make it optional?
+          logger.info(s"Pushing images to repository (this may take long, pushed to: ${Options.dockerUsername}:${Options.dockerRepository} @ ${if(Options.dockerHost.length > 0) Options.dockerHost else "DockerHub"})...")
+          builder.publishDockerImagesToRepo()
         }
-        t1 = System.nanoTime()
-        logger.info(s"t6: ${(t1-t0)/1000000000}")
-        if(Options.stage >= Options.compose){
-          //todo were here
+        if(Options.stage >= Options.swarm){
           locs.foreach(l => composer.buildDockerCompose(l._1, l._2))
-          t0 = System.nanoTime()
-          logger.info(s"t7: ${(t0-t1)/1000000000}")
           val stacks = locs.toList.map(_._1)
+          logger.info("Build Swarm files and scripts...")
           composer.buildDockerSwarm(stacks)
-          t1 = System.nanoTime()
-          logger.info(s"t8: ${(t1-t0)/1000000000}")
           composer.buildDockerSwarmStop(stacks)
-          t0 = System.nanoTime()
-          logger.info(s"t9: ${(t0-t1)/1000000000}")
           composer.buildDockerStack(locs.toList)
           composer.buildTroubleshootScripts(locs.toList)
-          t1 = System.nanoTime()
-          logger.info(s"t10: ${(t1-t0)/1000000000}")
 
-          //compose.runDockerSwarm()
+          //todo wie mit runnen?
+          //logger.info("Run Swarm...")
           //runner.Swarm.init()
+          //compose.runDockerSwarm()
           //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
         }
         //if(Options.stage.id > 2)
           //runner.runContainer(null)
 
         logger.info(s"Containerization plugin finished, deployment path: ${ buildPath.toString }")
-        var s2 = System.nanoTime()
-        logger.info(s"bp: ${(s2-s1)/1000000000}")
       }
     }
   }

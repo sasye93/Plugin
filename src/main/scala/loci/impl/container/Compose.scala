@@ -1,12 +1,17 @@
-package loci.containerize.container
+/**
+  * Compose class, builds all compose/swarm related files.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.container
 
 import java.io.File
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.Paths
 
-import loci.containerize.{Check, Options}
-import loci.containerize.IO._
-import loci.containerize.main.Containerize
-import loci.containerize.types.{ContainerConfig, ModuleConfig, TempLocation}
+import loci.impl.Options
+import loci.impl.IO._
+import loci.impl.main.Containerize
+import loci.impl.types.{ContainerConfig, ModuleConfig, TempLocation}
 
 import sys.process._
 
@@ -36,7 +41,6 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
     // - VOLUMES!
     // - secrts for mongo, local + glboal
     def buildDockerCompose(multiTierModule : plugin.TModuleDef, dirs : List[TempLocation]) : Unit = {
-      dirs.foreach(l => logger.info("locs: ++ " + l))
       val moduleCfg : ModuleConfig = multiTierModule.config
       val moduleNetworkName = Options.toolbox.getNameDenominator(multiTierModule.moduleName)
       val globalDbCreds : Option[(String,String)] = moduleCfg.getGlobalDbCredentials

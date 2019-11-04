@@ -1,12 +1,17 @@
-package loci.containerize.container
+/**
+  * Network class, builds network scripts.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.container
 
 import java.io.File
 import java.nio.file.Paths
 
 import scala.sys.process.Process
-import loci.containerize.IO.{IO, Logger}
-import loci.containerize.{Check, Options}
-import loci.containerize.main.Containerize
+import loci.impl.IO.IO
+import loci.impl.Options
+import loci.impl.main.Containerize
 import java.nio.file.Path
 
 sealed trait INetwork{ def _type : String; }

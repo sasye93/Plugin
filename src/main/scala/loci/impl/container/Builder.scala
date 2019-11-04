@@ -1,19 +1,23 @@
-package loci.containerize.container
+/**
+  * Builder class, builds images, containers, scripts.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
+package loci.impl.container
 
 import java.io.File
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path, Paths}
 
-import loci.containerize.AST.DependencyResolver
-import loci.containerize.IO._
-import loci.containerize.main.Containerize
+import loci.impl.AST.DependencyResolver
+import loci.impl.IO._
+import loci.impl.main.Containerize
 
 import sys.process._
-import loci.containerize.Options
-import loci.containerize.Check
-import loci.containerize.types.{ModuleConfig, TempLocation}
+import loci.impl.Options
+import loci.impl.Check
+import loci.impl.types.{ModuleConfig, TempLocation}
 
-import scala.io.Source
 import scala.util.Try
 //todo always services, never containers?
 
@@ -25,9 +29,6 @@ import scala.util.Try
 //todo err check script if err ocurred
 
 class Builder(io : IO)(implicit plugin : Containerize){
-
-  import plugin.global
-  import plugin.toolbox
 
   def getBuilder(dirs : Map[plugin.TModuleDef, List[TempLocation]], buildDir : File) : build = new build(dirs, buildDir)
 
@@ -81,7 +82,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
       dirs.flatMap(_._2).foreach(d => {
         val workDir : File = new File(d.getTempUri)
         val manifest = buildMANIFEST(d).orNull
-        if(Process("jar -cfm ./" + d.getJARName + ".jar MANIFEST.MF -C classfiles . ", workDir).!(logger) == 0){
+        if(Process("jar -cfm ./" + d.getServiceName + ".jar MANIFEST.MF -C classfiles . ", workDir).!(logger) == 0){
           manifest.delete()
           Try {
             io.recursiveClearDirectory(workDir.listFiles.find(f => f.isDirectory && f.getName == "classfiles").get, self = true)
@@ -122,10 +123,9 @@ class Builder(io : IO)(implicit plugin : Containerize){
 
       dirs.foreach{ mod =>
         mod._2.foreach(d => {
-          val relativeCP = getRelativeContainerPath(d).toString
           val cfg = d.entryPoint.config
           val ports : Set[Int] = d.entryPoint.endPoints.filter(_.way != "connect").map(_.port).union(cfg.getPorts).toSet
-          logger.warning(ports.toString)
+
           val script = cfg.getScript
 
           val CMD = //todo hardcoded //todo vers macro //todo descr macro
@@ -229,7 +229,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
       dirs.keys.map(_.config.getAppName).toSet[String].foreach{ appName =>
         val globalNet = new Network(plugin.io)(appName, buildDir.toPath)
         globalNet.buildSetupScript()
-        globalNet.buildNetwork()
+        //globalNet.buildNetwork() todo: runs network enable scripts, but throws no swarm error bec too early.
       }
       dirs.keys.foreach{ module =>
         val moduleNet = new Network(plugin.io)(module.moduleName, buildDir.toPath)
@@ -269,7 +269,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
           io.buildFile(io.buildScript(CMDStop), Paths.get(loc.getTempPathString, s"StopContainer.$osExt"))
         }
         moduleNet.buildSetupScript()
-        moduleNet.buildNetwork()
+        //moduleNet.buildNetwork() todo: runs network enable scripts, but throws no swarm error bec too early.
       }
     }
     def buildGlobalDatabase(modules : List[(Path, plugin.TModuleDef)]) : Unit = { //todo cred secrets, env
@@ -278,10 +278,10 @@ class Builder(io : IO)(implicit plugin : Containerize){
         val db = cfg.getGlobalDb.get
         val moduleName = Options.toolbox.getNameDenominator(mod._2.moduleName)
         val dbName = moduleName + "_globaldb"
-        plugin.runner.dockerPull(db)
         val CMD = s"""docker volume create $dbName
           |docker run -d --name $dbName --network ${ moduleName } --volume $dbName:/data -t ${ db }
           |""" //todo env vars user pw
+        plugin.runner.dockerPull(db)
         io.buildFile(io.buildScript(CMD.stripMargin), mod._1.resolve(s"startGlobalDb.$plExt"))
       }
     }
@@ -298,7 +298,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
       }
     }
 
-    def createReadme(buildDir : Path) : Unit = {
+    @deprecated("1.0") def createReadme(buildDir : Path) : Unit = {
       /** todo
       io.buildFile(Source.fromResource("/readme.html", this.getClass.getClassLoader).mkString, Paths.get(buildDir.toAbsolutePath.toString, "readme.html")) match{
         case Some(readme) =>

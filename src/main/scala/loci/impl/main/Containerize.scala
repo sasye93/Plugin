@@ -1,4 +1,4 @@
-package loci.containerize.main
+package loci.impl.main
 
 import java.io.File
 import java.nio.file.Paths
@@ -6,17 +6,17 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.nio.file.Path
 
-import loci.containerize.AST.DependencyResolver
-import loci.containerize.IO.Logger
-import loci.containerize.container.Runner
+import loci.impl.AST.DependencyResolver
+import loci.impl.IO.Logger
+import loci.impl.container.Runner
 
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
 import scala.tools.nsc.{Global, util}
-import loci.containerize.Options
-import loci.containerize.components._
-import loci.containerize.IO.IO
-import loci.containerize.types._
+import loci.impl.Options
+import loci.impl.components._
+import loci.impl.IO.IO
+import loci.impl.types._
 
 import scala.collection.mutable
 import scala.collection.immutable
@@ -42,7 +42,6 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val description : String = Options.pluginDescription
 
   val components : List[PluginComponent] = List[PluginComponent](
-    //new AnalyzeComponent(),
     new BuildComponent()
   )
 
@@ -54,8 +53,8 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   val dependencyResolver : DependencyResolver = new DependencyResolver()
 
   //todo algos always operate on here, mutating. change!
-  @deprecated("1") private[containerize] var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
-  @deprecated("1") private[containerize] var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
+  @deprecated("1") private[impl] var PeerDefs : mutable.MutableList[TAbstractClassDef] = mutable.MutableList[TAbstractClassDef]()
+  @deprecated("1") private[impl] var EntryPointsImpls : TEntryPointMap = new TEntryPointMap()
 
   @deprecated("1") type TAbstractClassDef = AbstractClassDef[Type, TypeName, Symbol]
   @deprecated("1") type TEntryPointDef = ContainerEntryPoint
@@ -76,7 +75,6 @@ class Containerize(val global: Global) extends Plugin with java.io.Closeable {
   }
 
   //todo classfiles as ref?
-  //todo replace null with option
   @deprecated("1") case class AbstractClassDef[T <: global.Type, TN <: global.TypeName, S <: global.Symbol](
                                                                                             module : S,
                                                                                             packageName : String,

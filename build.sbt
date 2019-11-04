@@ -29,4 +29,4 @@ assemblyMergeStrategy in assembly := {
 addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
 
 enablePlugins(JavaAppPackaging)
-enablePlugins(DockerPlugin)
+//enablePlugins(DockerPlugin)
