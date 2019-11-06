@@ -11,83 +11,50 @@ import loci.impl.main.Containerize
 class DependencyResolver(implicit val plugin : Containerize) {
 
   import plugin._
-  import global._
 
+  /**
+    * Get the associated @containerize object of a @service/@gateway
+    * (the @containerize object in which the peer that is started inside the @service/@gateway has been declared).
+    * @param entryPoint The entry point (@service/@gateway).
+    * @param Modules List of pickled modules (@containerize).
+    * @return The @containerize module.
+    */
   def getModuleOfEntryPoint(entryPoint: TSimpleEntryDef, Modules : TModuleList) : Option[TModuleDef] = {
     Modules.find(_.peers.exists(entryPoint.peerClassSymbolString == _.className))
   }
-  def getAssocEntryPointsOfPeer(entryPoints : TEntryList, p : TPeerDef) : TEntryList = {
-    entryPoints.filter(e => e.peerClassSymbolString == p.className)
-  }
-  @deprecated("1.0")
-  def getAssocEntryPointsOfClassSymbol(entryPoints : TEntryPointMap, c : ClassSymbol) : List[ClassSymbol] = {
-    entryPoints.filter(e => toolbox.weakSymbolCompare(e._2.peerClassSymbolString.asInstanceOf[plugin.global.Symbol], c)).toList.map(_._2.peerClassSymbolString.asInstanceOf[plugin.global.ClassSymbol])
-  }
   /**
-    * get startup order
+    * Get all @service/@gateway objects that start peer.
+    * @param entryPoints List of all @service/@gateway objects.
+    * @param peer a @peer def.
+    * @return List of the objects.
     */
-    @deprecated("1.0") // not updated
-  def startupOrderDependencies(entryPoints : TEntryPointMap) : Map[ClassSymbol, List[ClassSymbol]] = {
-      entryPoints.foldLeft(Map[ClassSymbol, List[ClassSymbol]]())((M, e) => M + (e._1 -> e._2.endPoints.filter(_.way != "listen").map(x => getAssocEntryPointsOfClassSymbol(entryPoints, x.connectionPeerSymbolString.asInstanceOf[plugin.global.ClassSymbol])).toList.flatten))
+  def getAssocEntryPointsOfPeer(entryPoints : TEntryList, peer : TPeerDef) : TEntryList = {
+    entryPoints.filter(e => e.peerClassSymbolString == peer.className)
   }
+
+  /**
+    * The following functions perform some filtering on the lists of @containerize/@service/@gateway objects,
+    * like filtering out disabled @containerize objects, invalid defs, and so on.
+    */
   def filterDisabled(modules : TModuleList) : TModuleList = modules.filterNot(_.config.getDisabled)
   private def filterInvalid(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => !(e.peerClassSymbolString.isEmpty || e.entryClassSymbolString.isEmpty)), peerDefs)
   private def filterInvalidPeerRefs(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints.filter(e => peerDefs.exists(p => e.peerClassSymbolString == p.className)), peerDefs)
   //this does nothing atm (check if every peer in module has entry point), because it is probably not desirable.
-  private def checkPeerRefCompleteness(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = {
-    (
-      entryPoints,
-      peerDefs
-    )
-  }
+  private def checkPeerRefCompleteness(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = (entryPoints, peerDefs)
 
-  //todo include ext?... make option switch //todo excluding java home really ok? ext libs here are unique!
+  /**
+    * The classXX methods extract the list of dependencies of the project from the class path.
+    * @return
+    */
   def classPathDependencies() : List[Path] = {
     plugin.classPath.asClassPathString.split(";").toList.map(Paths.get(_)).filterNot(_.startsWith(System.getProperties.get("java.home").toString))
   }
   def classJRELibs() : List[String] = List("\"$JAVA_HOME/lib\"", "\"$JAVA_HOME/lib/ext\"")
 
+  /**
+    * One-in-all function to perform all filtering.
+    */
   def dependencies(entryPoints : TEntryList, peerDefs : TPeerList) : (TEntryList, TPeerList) = {
-
     ((filterInvalid _).tupled andThen (filterInvalidPeerRefs _).tupled andThen (checkPeerRefCompleteness _).tupled)(entryPoints, peerDefs)
-
-    /**
-    EntryPoints = PeerDefs.map{
-        p => {
-          val entryPoint = EntryPointsImpls.find(k => k._2. ).orNull
-          if(entryPoint == null || entryPoint._containerPeer == NoSymbol)
-            reporter.error(null, s"no associated peer found for entry point: ${k._1.fullNameString}, object must at least override loci.containerize.types.ContainerEntryPoint.containerPeer")
-          entryPoint._containerEntryClass = k._1.asInstanceOf[entryPoint.global.Symbol]
-          (k._1 -> entryPoint)
-        }
-      }*/
-
-    /**
-    EntryPointsClasses.foreach{ e =>
-        if(!PeerClassDefs.exists(_.classSymbol.fullName == e._2._containerPeer.fullName))
-          reporter.error(null, s"Couldn't find associated peer class ${ e._2._containerPeer } for entry point ${ e._1.fullName }.")
-      }
-      PeerClassDefs.foreach{ e =>
-        if(!EntryPointsClasses.exists(_._2._containerPeer.fullName == e.classSymbol.fullName))
-          reporter.error(null, s"No entry point found for peer class ${ e.classSymbol.fullName }, every defined Peer must have at least one entry point inheriting from trait loci.containerize.types.ContainerEntryPoint.")
-      }
-      */
-
-    /**EntryPoints = EntryPointsClasses.map(k => k._2 -> PeerClassDefs.find(_.classSymbol.fullName == k._2._containerPeer.fullName).orNull)*/
-
-    /*ClassDefs.filter(_.isPeer).map(p => {
-
-      val fileDependencyList : List[TAbstractClassDef] = ClassDefs.toList
-      /*
-        ClassDefs.filter(x => x.isPeer && !x.equals(p)).foldLeft(ClassDefs)((list, x) =>
-          list.filterNot(c => c.equals(x) || c.classSymbol.javaClassName.startsWith(x.classSymbol.javaClassName))
-        ).toList
-       */
-      //.map(c => Paths.get(c.filePath.path).normalize)
-      //todo ok? we could also do outputpath + c.symbol.javaBinaryNameString.toString
-      // global.reporter.warning(null, fileList.map(_.toAbsolutePath).toString)
-
-      p.copy(classFiles = fileDependencyList)
-    })*/
   }
 }

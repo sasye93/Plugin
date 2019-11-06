@@ -1,5 +1,5 @@
 /**
-  * Temp location class, serves as a wrapper for generated images.
+  * Temp location class, serves as a wrapper for generated images (kind of abstract representation of peer images).
   * @author Simon Schönwälder
   * @version 1.0
   */
@@ -15,7 +15,6 @@ case class TempLocation(classSymbol : String, private val tempPath : Path, entry
   def getRepoImageName : String = Options.dockerUsername + "/" + Options.dockerRepository.toLowerCase + ":" + this.getImageName
   def getAppropriateImageName : String = if(Options.published) this.getRepoImageName else this.getImageName
   def getServiceName : String = getImageName.split("_").last
-  @deprecated("use getServiceName instead.") def getJARName : String = getServiceName
   def getTempUri : java.net.URI = tempPath.toUri
   def getTempPath : Path = Paths.get(getTempUri)
   def getTempPathString : String = getTempPath.toString

@@ -1,5 +1,5 @@
 /**
-  * Container config class, config for @service.
+  * Container config class, optional config for @service/@gateway.
   * @author Simon Schönwälder
   * @version 1.0
   */
@@ -16,7 +16,6 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
   import ContainerConfig.{defaultContainerConfig => default}
 
   //Docker/Swarm-specific
-  @deprecated("use @gateway") def getIsPublic : Boolean = getBooleanOfKey("public").getOrElse(default.public)
   def getReplicas : Integer = if(moduleConfig.isDefined && moduleConfig.get.getStateful) 1 else Math.ceil(getDoubleOfKey("replicas").getOrElse(default.replicas)).toInt
   def getCPULimit : Double = getDoubleOfKey("cpu_limit").getOrElse(default.cpu_limit)
   def getCPUReserve : Double = getDoubleOfKey("cpu_reserve").getOrElse(default.cpu_reserve)
@@ -27,22 +26,20 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
 
   //Non-Docker specific
   def getNetworkMode : String = getStringOfKey("network_mode").getOrElse(default.network_mode)
-
   def getDescription : String = StringContext.processEscapes(getStringOfKey("description").getOrElse(default.description).trim)
 
   //Local database
   def getLocalDbIdentifier : Option[String] = getStringOfKey("localDb").orElse(default.localDb)
+
+  //Note that if you add new db here, Tools.localDb and Tools.globalDb must be altered.
   def getLocalDb : Option[String] = getLocalDbIdentifier match{
     case Some("mongo") => Some("mongo:latest")
-    case Some("mysql") => Some("mysql:latest")
     case Some("none") => None
-    case Some(db) => io.logger.warning(s"The option you supplied for localDb in your module config is not supported and thus discarded: $db"); None //todo really not allow?
+    case Some(db) => io.logger.warning(s"The option you supplied for localDb in your module config is not supported and thus discarded: $db"); None
     case None => None
   }
   def getLocalDbCredentials : Option[(String, String)] = getTupleList("localDbCredentials", 2).map(t => (t.head.toString, t.last.toString)).headOption.orElse(default.localDbCredentials)
-
   def getSecrets : Set[String] = getListOfKey("secrets").toSet
-
   def getPorts : List[Int] = getListOfKey("ports").map(_.toInt).filter(p => p >= 0 && p <= 65535)
   def getEndpointMetadata : List[(String, String, String, Int)] = getTupleList("endpoints", 4).map(t => scala.util.Try{ (t.head.toString, t(2).toString, t(3).toString, Integer.parseInt(String.valueOf(t.last))) }.getOrElse(null)).filter(_ != null)
 
@@ -50,7 +47,6 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
     //todo implement
     val api = d.entryPoint
     val service = d.getImageName
-    //todo: service description as a manual way
     def getConnectionDescriptions(filterNot : String) : String = {
       val cons = d.entryPoint.endPoints.filter(_.way != filterNot).map(e => Tuple4(e.way, e.method, e.connectionPeerSymbolString, e.port)) ++ d.entryPoint.config.getEndpointMetadata.filter(_._1 != filterNot)
       if(cons.isEmpty) " -\n" else cons.foldLeft("")((E, ep) => E + s"@${ep._2}\t:${ep._4}\t\t[ ${ep._3} ]" + "\n")
@@ -72,7 +68,6 @@ class ContainerConfig(json : Option[String], moduleConfig : Option[ModuleConfig]
 }
 object ContainerConfig{
   object defaultContainerConfig{
-    @deprecated("1.0", "Disabled.") val public : Boolean = true
     val replicas : Double = 1
     val cpu_limit : Double = 0.2
     val cpu_reserve : Double = 0.1
@@ -92,7 +87,6 @@ object ContainerConfig{
 
     val JSON : String = {
       "{" +
-        "\"public\":\"" + public + "\"," +
         "\"attachable\":\"" + attachable + "\"," +
         "\"deploy_mode\":\"" + deploy_mode + "\"," +
         "\"replicas\":\"" + replicas + "\"," +

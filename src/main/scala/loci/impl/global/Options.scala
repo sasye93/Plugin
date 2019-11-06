@@ -1,12 +1,18 @@
+/**
+  * These are the global options that are applied to the whole extension (contrary to ModuleConfig and ContainerConfig).
+  * Some of these options are configurable, by passing:
+  * -P:containerize-build:<option>
+  *   Special characters must be masked, especially spaces with %20.
+  * @author Simon Schönwälder
+  * @version 1.0
+  */
 package loci.impl
 
-import java.io.File
 import java.nio.file.{Path, Paths}
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
 import loci.impl.IO.Logger
-import loci.impl.Check
 
 package object Options {
 
@@ -27,7 +33,7 @@ package object Options {
     def <=(s : Stage): Boolean = this < s || this == s
   }
 
-  val pluginName = "loci/impl"
+  val pluginName = "containerize-build"
   val pluginDescription = "Extends ScalaLoci to provide compiler support for direct deployment of Peers to Containers"
   val pluginHelp = "todo" //todo options descr
   val labelPrefix = "com.loci.containerize"
@@ -37,11 +43,11 @@ package object Options {
   case object publish extends Stage{ final def id = 3 }
   case object swarm extends Stage{ final def id = 4 }
 
-  def published = stage >= publish
+  def published : Boolean = stage >= publish
 
+  var initAbort : Boolean = false
   var containerize : Boolean = false
 
-  //todo find better path
   val tempDir : Path = Paths.get(System.getProperty("java.io.tmpdir"), "loci_containerize_temp")
 
   val containerHome : String = "/app"
@@ -55,14 +61,15 @@ package object Options {
   val backupDir : String = "image-backups"
 
   private val os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
+  private val platform : String = "linux"
+
   val errout : String = /*if(os == "windows") ">NUL 2>&1" else*/ "> /dev/null 2>&1"
 
-  @deprecated("1.0")
-  val osExt : String = "sh"
+  //Note: must end with /, respectively.
+  private val unixLibraryPathPrefix : String = "/var/lib/libs/"
+  private val windowsLibraryPathPrefix : String = "/C:/libs/"
 
-  val platform : String = "linux"
-  def plExt : String = "sh"
-
+  val libraryBaseImageTag : String = "loci-loci.containerize-library-base"
   /**
     * options and their default values.
     */
@@ -75,23 +82,14 @@ package object Options {
   var cleanBuilds : Boolean = true
   var saveImages : Boolean = false
 
-  //todo make empty, and if it is not set but needed, throw error. or alternatively, default user? + write in thesis what
   var dockerUsername : String = "scalalocicontainerize"
   var dockerPassword : String = "csEVmy7Q..jVAhF"
   var dockerHost : String = ""
   var dockerRepository : String = "thesis"
 
-  //todo not good, maybe we really ned it as compile opt
-  val targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
-
-  //must end with /, respectively.
-  private val unixLibraryPathPrefix : String = "/var/lib/libs/"
-  private val windowsLibraryPathPrefix : String = "/C:/libs/"
+  @deprecated("1.0") def targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
 
   def libraryPathPrefix : String = if(platform == "windows") windowsLibraryPathPrefix else unixLibraryPathPrefix
-
-  val libraryBaseImageTag : String = "loci-loci.containerize-library-base"
-
   def processOptions(options: List[String], error: String => Unit): Unit = {
 
     options.foreach {
@@ -111,7 +109,6 @@ package object Options {
         case "publish" => stage = publish
         case "swarm" => stage = swarm
       }
-
       case o @ _ => error("unknown option supplied: " + o)
     }
   }

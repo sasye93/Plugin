@@ -1,5 +1,5 @@
 /**
-  * Config class, the common superclass of container and module configs.
+  * Config class, the common superclass of container {@link loci.impl.types.ContainerConfig} and module {@link loci.impl.types.ModuleConfig} configs.
   * @author Simon Schönwälder
   * @version 1.0
   */
@@ -10,8 +10,7 @@ import java.io.File
 import scala.util.Try
 import scala.util.parsing.json.JSON
 import loci.impl.main.Containerize
-import loci.impl.Options
-import loci.impl.Check
+import loci.impl.{Check,Options}
 import loci.impl.IO._
 
 abstract class Config(json : Option[String], homeDir : Option[String] = None)(implicit io : IO, implicit private val plugin : Containerize) {
@@ -54,7 +53,6 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
 
   protected def getValueOfKey(key : String) : Option[Any] = Check ?=>[Option[Any]] (this.map, this.map.get(key), None)
   protected def parseString(v : Any) : Option[String] = Try { v.toString }.toOption
-  //def parseInt(v : Any) : Option[Int] = Try { parseString(v).get.toInt }.toOption
   protected def parseDouble(v : Any) : Option[Double] = Try { parseString(v).get.toDouble }.toOption
   protected def parseBoolean(v : Any) : Option[Boolean] = Try { parseString(v).get.toBoolean }.toOption
   protected def parseList(v : Any) : Option[List[String]] = Try { parseString(v).get.split(',').toList }.toOption
@@ -63,13 +61,12 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
   protected def getTupleList(key : String, length : Int) : List[List[Any]] = getValueOfKey(key) match{ case Some(s) => parseTupleList(s).getOrElse(List()).filter(_.length == length) case _ => List() }
   protected def getListOfKey(key : String) : List[String] = getValueOfKey(key) match{ case Some(s) => parseList(s).getOrElse(List[String]()); case _ => List[String]() }
   protected def getStringOfKey(key : String) : Option[String] = getValueOfKey(key) match{ case Some(s) => parseString(s); case _ => None }
-  //def getIntOfKey(key : String) : Option[Int] = getValueOfKey(key) match{ case Some(s) => parseInt(s); case _ => None }
   protected def getDoubleOfKey(key : String) : Option[Double] = getValueOfKey(key) match{ case Some(s) => parseDouble(s); case _ => None }
   protected def getBooleanOfKey(key : String) : Option[Boolean] = getValueOfKey(key) match{ case Some(s) => parseBoolean(s); case _ => None }
 
   private def getConfigType : Option[String] = getStringOfKey("type")
   def getHome : Option[String] = homeDir.orElse(getStringOfKey("home"))
-  //Script
+
   def getScript(implicit logger : Logger) : Option[File] = {
     getStringOfKey("script") match{
       case Some(script) =>
@@ -90,11 +87,9 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
   var customBaseImage : Option[String] = None
 
   /**
-   * todo: own macro to create a service from single image --- wait, no? global db can be provided by cloud provider, is better
    * todo: keep this global version? is referenced auf jeden fall in config below
    * recommended:
    * => jre-alpine
    * => redis (smallest) or couchdb
    */
-
 }

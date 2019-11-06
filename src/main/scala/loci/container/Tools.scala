@@ -10,8 +10,9 @@ package object Tools extends AnyRef {
   final def publicIp : String = "0.0.0.0"
   final def localhost : String = "127.0.0.1"
 
-  final def globalDbIp(module : Any) : String = s"mongodb://${ resolveIp(module) }_globaldb" //todo if supporting more than mongo, don't make this hardcoded.
-  final def localDbIp(service : Any) : String = s"mongodb://${ resolveIp(service) }_localdb" //todo if supporting more than mongo, don't make this hardcoded.
+  //todo: Currently, the Extension only supports mongodb, so this can be hardcoded. However, if supporting more than mongo, this must be adjusted.
+  final def globalDbIp(module : Any) : String = s"mongodb://${ resolveIp(module) }_globaldb"
+  final def localDbIp(service : Any) : String = s"mongodb://${ resolveIp(service) }_localdb"
 
   private[container] final class TypeConverter(val typeContext : scala.reflect.macros.blackbox.Context){
     import typeContext._
@@ -25,16 +26,7 @@ package object Tools extends AnyRef {
         case _: typeContext.TypecheckException => x.asInstanceOf[Tree]
       }
     }
-    def tpeType(x : Tree) : Type = tpe(x).tpe.asInstanceOf[typeContext.Type]//orElse NoType
-    @deprecated("1.0") def eval[T](tree : Tree) : Option[T] = {
-      Some(tree.asInstanceOf[T]) //todo evaluation is not going anywhere, because of dynamics.
-      /*try{
-        Some(typeContext.eval(typeContext.Expr[T](typeContext.untypecheck(tree))))
-      }
-      catch{
-        case _ @ _ => None
-      }*/
-    }
+    def tpeType(x : Tree) : Type = tpe(x).tpe.asInstanceOf[typeContext.Type] //orElse NoType
   }
 
   private[loci] final def getIpString(s : String) : String = {

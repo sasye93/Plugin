@@ -28,17 +28,17 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
       case Some(f) => composePath = f
       case None => logger.error(s"Could not create composer build directory at: ${ buildDir.getAbsolutePath + "/" + Options.composeDir }")
     }
-//todo all fun params into constructor
+    /**
+      * Build the compose/swarm yml files, one yml per @containerize.
+      */
+    //todo all fun params into constructor
     //todo interestings:
     // - see constraints and prefs for placement (e.g. user defined sec level
     // - extra_hosts
     // - health_check, also in DOCKERRFILE
     // - logging
     // - ip, aliases for versions or something?
-    // - ports long syntax
-    // - secrets (...?)
     // - --endpoint-mode for custom load balance-...?!?!?
-    // - VOLUMES!
     // - secrts for mongo, local + glboal
     def buildDockerCompose(multiTierModule : plugin.TModuleDef, dirs : List[TempLocation]) : Unit = {
       val moduleCfg : ModuleConfig = multiTierModule.config
@@ -117,8 +117,8 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                    |      - type: volume
                    |        source: ${ d.getImageName + "_localdb" }
                    |        target: /data/db
-                   |""".stripMargin + //todo check volume should be generated automatically by db
-                //todo add for mysql, also at globaldb
+                   |""".stripMargin +
+                //todo add for mysql, also at globaldb (NO DONT)
                   (if(localDbCreds.isDefined && cfg.getLocalDbIdentifier.get == "mongo")
                 s"""    environment:
                    |      MONGO_INITDB_ROOT_USERNAME: ${ localDbCreds.get._1 }
@@ -205,7 +205,7 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
        * target: /var/run/docker.sock
        */
               /**
-              |    healthcheck: //todo in dockerfile?
+              |    healthcheck:
               |      test: [\"CMD\", \"curl\", \"-f\", \"127.0.0.1\"]
               |      interval: 2m
               |      timeout: 15s
@@ -222,8 +222,11 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
 
       io.buildFile(CMD.stripMargin, Paths.get(composePath.getAbsolutePath, filesPath, multiTierModule.moduleName + ".yml"))
     }
+    /**
+      * Build the swarm-init.sh script, starting point to start the whole application as swarm.
+      */
     def buildDockerSwarm(multiTierModules : List[plugin.TModuleDef]) : Unit = {
-      val CMD = //todo grep leader necess?
+      val CMD =
        s"""(docker node ls | grep "Leader") ${Options.errout}
            |if [ $$? -ne 0 ]; then
            |  docker swarm init --advertise-addr eth0
@@ -295,7 +298,9 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
 
       io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, "swarm-init.sh"))
     }
-
+    /**
+      * Build the swarm-stop.sh script, to stop the whole application.
+      */
     def buildDockerSwarmStop(multiTierModules : List[plugin.TModuleDef]) : Unit = {
       val CMD =
         multiTierModules.foldLeft("")((M, m) => M + {
@@ -311,11 +316,14 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
       io.buildFile(io.buildScript(CMD.stripMargin), Paths.get(composePath.getAbsolutePath, "swarm-stop.sh"))
     }
 
+    /**
+      * Build the stack-XXX.sh scripts that allow to start each microservice domain (a single @containerize module and its services) separately.
+     */
     def buildDockerStack(multiTierModules : List[(plugin.TModuleDef, List[TempLocation])]) : Unit = {
       multiTierModules.foreach{ m =>
         val moduleName = m._1.moduleName
         val moduleNetwork = Options.toolbox.getNameDenominator(moduleName)
-        val CMD = //todo grep leader necess?
+        val CMD =
           s"""(docker node ls --filter "role=manager" --format "{{.Self}}" | grep "true") ${Options.errout}
              |if [ $$? -ne 0 ]; then
              |  echo "It appears that this node is not a Swarm Manager. You can only deploy a Stack to a Swarm from one of its manager nodes (use swarm-init.sh, docker swarm init or docker swarm join)."
@@ -349,6 +357,10 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
         io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, s"stack-$moduleName.sh"))
       }
     }
+
+    /**
+      * Build the check-XXX.sh scripts that facilitate to print error logs of services.
+      */
     def buildTroubleshootScripts(multiTierModules : List[(plugin.TModuleDef, List[TempLocation])]) : Unit = {
       multiTierModules.foreach { m =>
         val CMD =
@@ -370,11 +382,10 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
         io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, s"check-${ m._1.moduleName }.sh"))
       }
     }
+    @deprecated("Don't start the swarm programatically.")
     def runDockerSwarm() : Unit = {
-      Process("cmd /k start bash swarm-init.sh", composePath).run() //todo really make this blocking?
+      Process("cmd /k start bash swarm-init.sh", composePath).run()
       //orig call: cmd /k start bash swarm-init.sh
     }
-    //$ docker service rm my-nginx
-    //$ docker network rm nginx-net nginx-net-2
   }
 }

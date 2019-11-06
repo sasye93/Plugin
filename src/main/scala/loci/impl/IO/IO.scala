@@ -5,22 +5,20 @@
   */
 package loci.impl.IO
 
-import java.io.{BufferedReader, BufferedWriter, DataInputStream, DataOutputStream, File, FileInputStream, FileOutputStream, FileReader, FileWriter, IOException, InputStreamReader, ObjectInputStream, ObjectOutputStream, OutputStreamWriter}
-import java.nio.CharBuffer
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{CopyOption, FileAlreadyExistsException, Files, Path, Paths}
+import java.io.{BufferedWriter, DataOutputStream, File, FileOutputStream, FileWriter, IOException}
+import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 
 import loci.impl.{Check, Options}
-import loci.impl.main.Containerize
 import loci.impl.types.{Pickle, TempLocation}
 
 import scala.io.{BufferedSource, Source}
+import scala.reflect.io.Directory
+
 import upickle.default._
 
 class IO(implicit val logger : Logger) {
 
   def serialize[T <: Pickle](obj : Pickle, path : Path) : Unit = {
-    var oos : OutputStreamWriter = null
     try{
       val json = write(obj)
       Files.write(path, json.getBytes)
@@ -31,10 +29,6 @@ class IO(implicit val logger : Logger) {
                 _ : SecurityException |
                 _ : IOException) => logger.error("Serialization error: " + e.getMessage + s" (tried to serialize object ${obj}).")
       case e : Throwable => logger.error("Serialization error: " + e.getMessage)
-    }
-    finally{
-      if(oos != null)
-        oos.close()
     }
   }
   def deserialize[T <: Pickle](path : Path) : Option[T] = {
@@ -53,15 +47,11 @@ class IO(implicit val logger : Logger) {
                 _ : IOException) => logger.error("Deserialization error: " + e.getMessage + s" (tried to serialize object from ${path}).")
       case e : Throwable => logger.error("Deserialization error: " + e.getMessage)
     }
-    finally{
-    }
     None
   }
   def readFromFile(path : Path) : String = readFromFile(new File(path.toUri))
   def readFromFile(file : File, binary : Boolean = false) : String = {
-    var ds : DataInputStream = null
     var bs : BufferedSource = null
-    var result = ""
     try{
       if(!(file.exists && file.isFile))
         throw new IOException(s"Cannot open file ${file.getPath}.")
@@ -80,12 +70,9 @@ class IO(implicit val logger : Logger) {
     finally{
       if(bs != null)
         bs.close
-      if(ds != null)
-        ds.close
     }
     ""
   }
-
   def buildFile(content : String, path : Path, binary : Boolean = false, unix : Boolean = false) : Option[File] = {
     var bw : BufferedWriter = null
     var os : DataOutputStream = null
@@ -102,8 +89,8 @@ class IO(implicit val logger : Logger) {
       val con = if(unix) Options.toolbox.toUnixFile(content) else content
 
       if(binary){
-        os = new DataOutputStream(new FileOutputStream(file));
-        os.write(con.getBytes());
+        os = new DataOutputStream(new FileOutputStream(file))
+        os.write(con.getBytes())
       }
       else{
         bw = new BufferedWriter(new FileWriter(file))
@@ -161,7 +148,6 @@ class IO(implicit val logger : Logger) {
     None
   }
   def recursiveClearDirectory(dir : File, self : Boolean = false) : Unit = {
-    import scala.reflect.io.Directory
     try{
       if(dir.isDirectory){
         dir.listFiles(f => if(f.isDirectory) Directory(f).deleteRecursively() else f.delete())
@@ -178,16 +164,6 @@ class IO(implicit val logger : Logger) {
     }
   }
 
-  @deprecated("")
-  def clearTempDirs(dirs : List[TempLocation]) : Unit = dirs match{
-    case head :: tail =>
-
-      val files = new File(head.getTempUri).listFiles()
-      files.filterNot(_.getName == (head.classSymbol + ".jar")).foreach(_.delete())
-
-      this.clearTempDirs(tail)
-    case Nil =>
-  }
   def copyContentOfDirectory(dir : Path, to : Path, recursive : Boolean = true, excludePrefix : String = null) : Unit = {
     try{
       val d : File = new File(dir.toUri)
@@ -216,22 +192,6 @@ class IO(implicit val logger : Logger) {
                 _ : IOException) => logger.error(e.getMessage + s" (tried to clear dir recursively ${dir.toString}).")
       case e : Throwable => logger.error(e.getMessage)
     }
-    finally{
-    }
-  }
-  @deprecated("1.0")
-  def listDependencies(repository : Path) : List[Path] = {
-    val f : File = repository.toFile
-    if(!f.exists)
-      return List()
-    else if(!f.canRead)
-      return null //todo err
-
-    if(f.isFile)
-      List[Path](f.toPath)
-
-    else
-      f.listFiles().flatMap(file => listDependencies(file.toPath)).toList
   }
   def buildScript(CMD : String) : String  = "#!/bin/sh\n" + Options.toolbox.toUnixFile(CMD)
 
@@ -240,8 +200,8 @@ class IO(implicit val logger : Logger) {
     try{
       Path.of(p) match{
         case null => None
-        case p if (!p.isAbsolute && Check ? homeDir) => Some(Paths.get(homeDir.toString, p.toString).toFile)
-        case p if (!p.isAbsolute) => logger.error(s"You can only supply a relative path to a file if you first set your home directory with the 'home' option in your module config, otherwise you must supply an absolute path: ${p.toString}."); None
+        case p if !p.isAbsolute && Check ? homeDir => Some(Paths.get(homeDir.toString, p.toString).toFile)
+        case p if !p.isAbsolute => logger.error(s"You can only supply a relative path to a file if you first set your home directory with the 'home' option in your module config, otherwise you must supply an absolute path: ${p.toString}."); None
         case p @ _ => Some(p.toFile)
       }
     }

@@ -6,13 +6,13 @@
 package loci.impl.container
 
 import java.io.File
-import java.nio.file.Paths
+import java.nio.file.{Path,Paths}
 
-import scala.sys.process.Process
 import loci.impl.IO.IO
 import loci.impl.Options
 import loci.impl.main.Containerize
-import java.nio.file.Path
+
+import scala.sys.process.Process
 
 sealed trait INetwork{ def _type : String; }
 case object Bridge extends INetwork{ val _type = "bridge"; }
@@ -40,23 +40,9 @@ class Network(io : IO)(val name : String, buildDir : Path, network : INetwork = 
         | fi
         |fi
         |docker network create --attachable -d ${getType} ${getName}""".stripMargin
-    io.buildFile(io.buildScript(CMD), Paths.get(networkDir.getAbsolutePath, getName + ".sh"))  //todo make all sh, or what
+    io.buildFile(io.buildScript(CMD), Paths.get(networkDir.getAbsolutePath, getName + ".sh"))
   }
   def buildNetwork() : Unit = {
     Process(s"bash $getName.sh", networkDir).!(plugin.logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
   }
-
-  /**
-  class bridge extends Network{
-
-    def createNetwork(netName : String) : Boolean = Process(s"docker network create $netName").!(logger) == 0
-    def joinContainer(netName : String, containerName : String) : Boolean = Process(s"docker network connect $netName $containerName").!(logger) == 0
-  }
-  class overlay extends Network{
-
-    //todo --attachable means standalone containers can join as well, not only services; --opt encrypted = better sec, lower perf (linux only)
-    def createNetwork(netName : String) : Boolean = Process(s"docker network create -d overlay --attachable $netName").!(logger) == 0
-    def joinContainer(netName : String, containerName : String) : Boolean = Process(s"docker network connect $netName $containerName").!(logger) == 0
-  }
-    */
 }
