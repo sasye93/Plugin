@@ -36,3 +36,5 @@ If one wants to rebuild the extension from source code, the easiest way to do so
 
 ## How to Use the Extension
 The extension provides the three annotations _@containerize_, _@service_ and _@gateway_ inside loci.container. See the thesis on how to use them.
+
+In case of errors, contact simon.schoenwaelder@gmx.de
