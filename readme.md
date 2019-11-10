@@ -16,9 +16,8 @@ The following code for the extension is available:
 * The thesis document at https://github.com/sasye93/containerization-thesis (restricted).
 
 ## Usage and Dependencies
-There are different ways to install the extension:
-1. Add **containerize.jar** to the unmanaged _lib/_ directory of sbt (by default, this is <projectDir>/lib, create it if not existing).
-Then, add to the build.sbt:
+The extension comprises (1) macro implementations and (2) a compiler plugin stage. There are different ways to install the extension:
+1. Add **containerize.jar** to the unmanaged _lib/_ directory of sbt (by default, this is <projectDir>/lib, create it if not existing). Then, add to the build.sbt:
 ```
 autoCompilerPlugins := true
 scalacOptions += s"-Xplugin:$${baseDirectory.value.getAbsolutePath}\\lib\\containerize.jar"
