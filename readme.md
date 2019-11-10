@@ -21,9 +21,9 @@ There are different ways to install the extension:
 Then, add to the build.sbt:
 ```
 autoCompilerPlugins := true
-		scalacOptions += s"-Xplugin:
-		$${baseDirectory.value.getAbsolutePath}\\lib\\containerize.jar"
+scalacOptions += s"-Xplugin:$${baseDirectory.value.getAbsolutePath}\\lib\\containerize.jar"
 ```
+_**OR**_
  2. Add **containerize.jar** both to the projects class path (add it as a library dependency) and as a Scala compiler plugin.
  How to do this depends on the IDE used. For instance in IntelliJ, it is done via _File -> Project Structure -> Libraries/Global Libraries -> Add} and File -> Settings -> Build,Execution,Deployment -> Compiler -> Scala Compiler -> Add under 'Compiler plugins' of the respective Module_. Note however that if you add the library and/or the plugin manually via the IDE in a sbt project, your changes might be overwritten the next time sbt synchronizes.
 
