@@ -20,8 +20,9 @@ The extension comprises (1) macro implementations and (2) a compiler plugin stag
 1. Add **containerize.jar** to the unmanaged _lib/_ directory of sbt (by default, this is <projectDir>/lib, create it if not existing). Then, add to the build.sbt:
 ```
 autoCompilerPlugins := true
-scalacOptions += s"-Xplugin:$${baseDirectory.value.getAbsolutePath}\\lib\\containerize.jar"
+scalacOptions += s"-Xplugin:${baseDirectory.value.getAbsolutePath}\\lib\\containerize.jar"
 ```
+ (if this causes errors because of resolving baseDirectory, write the hardcoded full path to the .jar).
 _**OR**_
  
  2. Add **containerize.jar** both to the projects class path (add it as a library dependency) and as a Scala compiler plugin.
