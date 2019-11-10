@@ -1,4 +1,4 @@
-The following describes how to install and use the containerization extension. _This is an extraction of chapter appendix/installation in the thesis, go there for more info._
+The following describes how to install and use the containerization extension. This is an extraction of the appendix/installation chapter and only describes how to make the extension running. For how to use it in code, see the thesis.
 
 ## Prerequisites
 The containerization extension requires the following prerequisites:
@@ -35,3 +35,5 @@ Now, one can import loci.container._ inside the project where ever the extension
 There is no difference to conventional ScalaLoci projects when building (respectively compiling) a containerized project. The extension steps in when the compilation of a project is triggered. You can do this e.g. using _sbt compile_ or inside an IDE. While building, the Docker daemon must be running and reachable on the host. Note however, that one cannot directly run the result of the containerization process using _sbt run_, _scala_ or the run command inside the IDE, because this will just run the compiled code, not the containerized results. Instead, the extension will create all the files and output during build, which can then be used.
 If one wants to rebuild the extension from source code, the easiest way to do so is to create a fat jar using _sbt assembly_ and re-add _scalac-plugin.xml_ to its top level directory.
 
+## How to Use the Extension
+The extension provides the three annotations _@containerize_, _@service_ and _@gateway_ inside loci.container. See the thesis on how to use them.
