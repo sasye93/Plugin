@@ -8,9 +8,8 @@
 
 package loci.container
 
-import loci.impl.IO.{IO, Logger}
-import loci.impl.Options
-import loci.impl.types.{SimplifiedContainerModule, SimplifiedPeerDefinition}
+import loci.container.build.IO.{IO, Logger, SimplifiedContainerModule, SimplifiedPeerDefinition}
+import loci.container.build.Options
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
@@ -18,7 +17,7 @@ import scala.reflect.macros.blackbox
 import scala.language.implicitConversions
 
 /**
-  * @param config Optional config passed to this macro, @see loci.impl.types.ModuleConfig
+  * @param config Optional config passed to this macro, @see loci.container.impl.types.ModuleConfig
   */
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class containerize(config : String = "") extends StaticAnnotation {
@@ -36,8 +35,6 @@ object ContainerizeImpl {
 
     implicit def convertCtoTC(t : c.Tree) : tc.typeContext.Tree = t.asInstanceOf[tc.typeContext.Tree]
     implicit def convertTCtoC(t : tc.typeContext.Tree) : c.Tree = t.asInstanceOf[c.Tree]
-    //todo prevent null pointer
-    //def tpeType(x : Tree) : Type = tpe(x).asInstanceOf[c.Tree].tpe.asInstanceOf[c.Type]//orElse NoType
 
     annottees.map(_.tree).toList match {
       case (m : ModuleDef) :: Nil =>

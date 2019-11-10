@@ -7,10 +7,8 @@
   */
 package loci.container
 
-import loci.impl.IO.Logger
-import loci.impl.types.{SimplifiedConnectionEndPoint, SimplifiedContainerEntryPoint}
-import loci.impl.Options
-import loci.impl.IO.IO
+import loci.container.build.IO._
+import loci.container.build.Options
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
@@ -18,7 +16,7 @@ import scala.reflect.macros.blackbox
 import scala.language.implicitConversions
 
 /**
-  * @param config Optional config passed to this macro, @see loci.impl.types.ContainerConfig
+  * @param config Optional config passed to this macro, @see loci.container.impl.types.ContainerConfig
   */
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class service(config: String = "") extends StaticAnnotation {
@@ -43,9 +41,6 @@ object ServiceImpl {
     val publicIpSig = tpe(reify(Tools.publicIp _).tree).find(_.isInstanceOf[Select]).head.symbol.fullName
     val localhostSig =  tpe(reify(Tools.localhost _).tree).find(_.isInstanceOf[Select]).head.symbol.fullName
 
-    //todo prevent null pointer
-    //def tpeType(x : Tree) : Type = tpe(x).asInstanceOf[c.Tree].tpe.asInstanceOf[c.Type]//orElse NoType
-
     annottees.map(_.tree).toList match {
       case (module : ModuleDef) :: Nil =>
         val mod = c.typecheck(module).asInstanceOf[ModuleDef] //todo note that this fails if declarations are made outside, make try catch
@@ -57,7 +52,7 @@ object ServiceImpl {
             case q"new $s(config=$p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
             case q"new $s($p)" if eq(s.toString) && p.toString.matches("^\"(.|\n)+\"") => Some(p.toString.stripPrefix("\"").stripSuffix("\""))
             case q"new $s($p)" if eq(s.toString) => if(p.nonEmpty) c.warning(c.enclosingPosition, s"Did not recognize config provided, : $p"); None
-            case q"new $s" => None
+            case q"new $_" => None
             case _ => c.abort(c.enclosingPosition, "Invalid @service annotation style. Use '@service(path : String = \"\"), e.g. @service(\"scripts/mycfg.xml\") or without parameter.")
           }
 
@@ -108,12 +103,12 @@ object ServiceImpl {
                               conPeer,
                               ___args.collectFirst({
                                 case Literal(Constant(port: Int)) => Some(port)
-                                case s : Apply if(tpe(s).tpe.resultType weak_<:< c.typeOf[Long]) => None //todo this ok?
+                                case s : Apply if(tpe(s).tpe.resultType weak_<:< c.typeOf[Long]) => None
                               }).flatten.getOrElse(0),
                               {
                                 val host = ___args.collectFirst({
                                   case Literal(Constant(host: String)) => Some(host)
-                                  case s : Select => None
+                                  case _ : Select => None
                                   case a : Apply => tpe(a).symbol.fullName match{
                                     case `resolveIpSig` => Some(a.args.head.symbol.fullName)
                                     case `publicIpSig` => Some("0.0.0.0")
@@ -129,7 +124,7 @@ object ServiceImpl {
                               "1.0", //version is currently not in use.
                               tpeType(_a).typeArgs.headOption match {
                                 case Some(prot) => prot match{
-                                  case prot if prot <:< c.typeOf[loci.communicator.tcp.TCP] => "TCP"
+                                  case p if p <:< c.typeOf[loci.communicator.tcp.TCP] => "TCP"
                                   case prot if prot <:< c.typeOf[loci.communicator.ws.akka.WS] => "WebSocket"
                                   case _ => "unknown"
                                 }
@@ -155,7 +150,7 @@ object ServiceImpl {
           val endpoint = SimplifiedContainerEntryPoint(containerEntryClass, allEndPoints.head._1, config, endpoints, isGateway)
 
           if(containerEntryClass.split('.').last.equalsIgnoreCase("globaldb")) c.warning(c.enclosingPosition, "The service name 'database' is reserved for automatically set up databases using the globalDb option, you should not use this as a service name, as this could result in conflicts.")
-          if(isGateway && endpoints.forall(_.way == "connect")) c.warning(c.enclosingPosition, "Seems like you don't listen for any connections within this service, consider annotating it with @service instead of @gateway.")
+          if(isGateway && endpoints.forall(_.way == "connect") && !(config.isDefined && config.get.contains("ports"))) c.warning(c.enclosingPosition, "Seems like you don't listen for any connections within this service, consider annotating it with @service instead of @gateway.")
 
           implicit val logger : Logger = new Logger(c.universe.asInstanceOf[tools.nsc.Global].reporter)
           val io = new IO()
@@ -163,7 +158,7 @@ object ServiceImpl {
           if(!containerEntryClass.contentEquals(NoSymbol.fullName))
             io.serialize(endpoint, Options.tempDir.resolve(containerEntryClass + ".ep"))
         }
-        else{//todo is this really what we want, disallow everything else with not peers?
+        else{
           c.warning(c.enclosingPosition, "Couldn't find a multitier.start directive inside @service/@gateway object. It is either non-existent or cannot be detected by the containerization extension. Make sure you use compatible syntax. Service will be skipped and not deployed.")
         }
 

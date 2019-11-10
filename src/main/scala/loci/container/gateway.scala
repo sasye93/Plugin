@@ -11,7 +11,7 @@ import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
 
 /**
-  * @param config Optional config passed to this macro, @see loci.impl.types.ContainerConfig
+  * @param config Optional config passed to this macro, @see loci.container.impl.types.ContainerConfig
   */
 @compileTimeOnly("enable macro paradise to expand macro annotations")
 class gateway(config: String = "") extends StaticAnnotation {
