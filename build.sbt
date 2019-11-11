@@ -15,8 +15,8 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2",
   "de.tuda.stg" %% "scala-loci-lang" % "0.3.0",
   "de.tuda.stg" %% "scala-loci-serializer-upickle" % "0.3.0",
-  "de.tuda.stg" %% "scala-loci-communicator-ws-akka" % "0.3.0",
-  "de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.3.0",
+  //"de.tuda.stg" %% "scala-loci-communicator-ws-akka" % "0.3.0",
+  //"de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.3.0",
   "de.tuda.stg" %% "scala-loci-lang-transmitter-rescala" % "0.3.0",
   //"org.mongodb.scala" %% "mongo-scala-driver" % "2.6.0"
 )

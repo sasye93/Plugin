@@ -32,15 +32,11 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
       * Build the compose/swarm yml files, one yml per @containerize. This file can be used to start the whole stack and
       * all services in it. To do so, use the respective stack-XXX.sh script (or manually using docker stack <...>).
       */
-    //todo all fun params into constructor
     //todo interestings:
-    // - see constraints and prefs for placement (e.g. user defined sec level
-    // - extra_hosts
+    // - see constraints and prefs for placement (e.g. user defined sec level)
     // - health_check, also in DOCKERRFILE
     // - logging
-    // - ip, aliases for versions or something?
-    // - --endpoint-mode for custom load balance-...?!?!?
-    // - secrts for mongo, local + glboal
+    // - ip, aliases for versions or something
     def buildDockerCompose(multiTierModule : plugin.TModuleDef, dirs : List[TempLocation]) : Unit = {
       val moduleCfg : ModuleConfig = multiTierModule.config
       val moduleNetworkName = Options.toolbox.getNameDenominator(multiTierModule.moduleName)
@@ -119,7 +115,6 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
                    |        source: ${ d.getImageName + "_localdb" }
                    |        target: /data/db
                    |""".stripMargin +
-                //todo add for mysql, also at globaldb (NO DONT)
                   (if(localDbCreds.isDefined && cfg.getLocalDbIdentifier.get == "mongo")
                 s"""    environment:
                    |      MONGO_INITDB_ROOT_USERNAME: ${ localDbCreds.get._1 }
@@ -389,9 +384,8 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
         io.buildFile(io.buildScript(CMD), Paths.get(composePath.getAbsolutePath, s"check-${ m._1.moduleName }.sh"))
       }
     }
-    @deprecated("Don't start the swarm programmatically. Developer should use scripts manually.")
     def runDockerSwarm() : Unit = {
-      Process("cmd /k start bash swarm-init.sh", composePath).run()
+      Process("bash swarm-init.sh", composePath).run() //orig: -> cmd /k start bash swarm-init.sh
       //orig call: cmd /k start bash swarm-init.sh
     }
   }

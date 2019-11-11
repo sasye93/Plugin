@@ -35,16 +35,18 @@ package object Options {
 
   val pluginName = "containerize-build"
   val pluginDescription = "Extends ScalaLoci to provide compiler support for direct deployment of Peers to Containers"
-  val pluginHelp = "todo" //todo options descr
+  val pluginHelp = "-"
   val labelPrefix = "com.loci.containerize"
 
   case object file extends Stage{ final def id = 1 }
   case object image extends Stage{ final def id = 2 }
   case object publish extends Stage{ final def id = 3 }
   case object swarm extends Stage{ final def id = 4 }
+  case object run extends Stage{ final def id = 5 }
 
   def published : Boolean = stage >= publish && publishImages
 
+  //if compilation is aborted programmatically.
   var initAbort : Boolean = false
   var containerize : Boolean = false
 
@@ -60,7 +62,6 @@ package object Options {
   val networkDir : String = "network"
   val backupDir : String = "image-backups"
 
-  private val os : String = if (System.getProperty("os.name").toLowerCase().indexOf("win") >= 0) "windows" else "linux" //todo actually eliminate
   private val platform : String = "linux"
 
   val errout : String = /*if(os == "windows") ">NUL 2>&1" else*/ "> /dev/null 2>&1"
@@ -89,7 +90,7 @@ package object Options {
   var dockerHost : String = ""
   var dockerRepository : String = "thesis"
 
-  @deprecated("1.0") def targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
+  @deprecated("Don't use this hardcoded, use reflection.", "1.0") def targetDir : String = "target\\scala-" + scala.tools.nsc.Properties.versionNumberString + "\\classes"
 
   def libraryPathPrefix : String = if(platform == "windows") windowsLibraryPathPrefix else unixLibraryPathPrefix
   def processOptions(options: List[String], error: String => Unit): Unit = {
@@ -111,11 +112,12 @@ package object Options {
         case "image" => stage = image
         case "publish" => stage = publish
         case "swarm" => stage = swarm
+        case "run" => stage = run
+        case _ => stage = swarm
       }
       case o @ _ => error("unknown option supplied: " + o)
     }
   }
-  //todo warnings
   def checkConstraints(logger : Logger) : Unit = {
     if(stage >= publish){
       if(Check ! dockerUsername || Check ! dockerPassword)

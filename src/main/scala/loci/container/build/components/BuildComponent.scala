@@ -148,7 +148,7 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
             builder.saveImageBackups()
           }
         }
-        if(Options.stage >= Options.publish) {
+        if(Options.publishImages) {
           logger.info(s"Pushing images to repository (this may take long depending on your internet connection, pushed to: ${Options.dockerUsername}:${Options.dockerRepository} @ ${if(Options.dockerHost.length > 0) Options.dockerHost else "DockerHub"})...")
           builder.publishDockerImagesToRepo()
         }
@@ -161,16 +161,15 @@ class BuildComponent(implicit val plugin : Containerize) extends PluginComponent
           composer.buildDockerStack(peerMappings.toList)
           composer.buildTroubleshootScripts(peerMappings.toList)
 
-          //todo wie mit runnen?
-          //logger.info("Run Swarm...")
-          //runner.Swarm.init()
-          //compose.runDockerSwarm()
+          if(Options.stage >= Options.run)
+            logger.info("Run Swarm...")
+            composer.runDockerSwarm()
           //runner.Swarm.deploy("test", Paths.get(outputDir.toString, "docker-compose.yml"))
         }
         //if(Options.stage.id > 2)
           //runner.runContainer(null)
 
-        logger.info(s"Containerization extension finished, deployment path: ${ buildPath.toString }.")
+        logger.info(s"Containerization extension finished, deployment path: ${ buildPath.toString }.\nUse ./compose/swarm-init.sh to start the swarm with all built stacks, or stack-XXX.sh to only start a certain stack.")
       }
     }
   }

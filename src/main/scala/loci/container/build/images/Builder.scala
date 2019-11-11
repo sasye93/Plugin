@@ -17,10 +17,8 @@ import loci.container.build.types.{ModuleConfig, TempLocation}
 
 import sys.process._
 import scala.util.Try
-//todo always services, never containers?
 
 //todo what happens if nested execpt?
-
 //todo err check script if err ocurred
 
 class Builder(io : IO)(implicit plugin : Containerize){
@@ -40,7 +38,6 @@ class Builder(io : IO)(implicit plugin : Containerize){
     private def getRelativeContainerPath(loc : TempLocation): Path = buildDir.toPath.relativize(loc.getTempPath).normalize
     private def byPackageManager(cfg : ModuleConfig, apkSuffix : String = "", aptSuffix : String = "") : String = if(cfg.getJreBaseImage.contains("alpine")) apkSuffix else aptSuffix
 
-    //todo make this a constructor, its first mandat. step
     /**
       * Grasp project dependencies.
       */
@@ -128,7 +125,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
                |COPY ./run.sh ./*.jar ./
                |""" +
               (if(d.entryPoint.isGateway && ports.nonEmpty) ports.foldLeft("EXPOSE")((S, port) => S + " " + port) else "") + "\n" +
-              Check ?=> (script.orNull,  //todo can we just run it without copy? layers!
+              Check ?=> (script.orNull,
                 s"COPY ./preRunSpecific.sh ${Options.containerHome}/preRunSpecific.sh \n" +
                   s"RUN ${Options.containerHome}/preRunSpecific.sh \n", "") +
               s"ENTRYPOINT ./run.sh \n"
@@ -146,11 +143,11 @@ class Builder(io : IO)(implicit plugin : Containerize){
     /**
       * Build the Dockerfiles for the base images of the peer images (that contain among other things the library dependencies).
       */
-    def buildDockerBaseFiles() : Unit = {//todo copy only libs
+    def buildDockerBaseFiles() : Unit = {
       dirs.keys.foreach(m => {
         val cfg : ModuleConfig = m.config
         val script : Option[File] = cfg.getScript
-        val CMD = //todo COPY --from=0 / / ? or whatever, hauptsache multiple builds work
+        val CMD =
         //${ Options.dbBaseImage match{ case Some(db) => s"|COPY --from=$db / /" case None => "" } }
           s"""FROM ${cfg.getJreBaseImage} AS jre-build
            ${ cfg.getCustomBaseImage match{ case Some(custom) => s"|COPY --from=$custom / /" case None => "" } }
@@ -173,7 +170,6 @@ class Builder(io : IO)(implicit plugin : Containerize){
       })
     }
 
-    //todo get proper err code, res.: own DNS
     /**
       * Build the peer images.
       */
@@ -182,7 +178,7 @@ class Builder(io : IO)(implicit plugin : Containerize){
         Process(s"bash BuildBaseImage_${ m._1.moduleName }.sh", libraryPath.toFile).!!(logger)
 
         m._2.foreach{ d =>
-          Process("bash " + "BuildContainer.sh" + "\"", d.getTempFile).!!(logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
+          Process("bash " + "BuildContainer.sh" + "\"", d.getTempFile).!!(logger)
         }
       }
     }

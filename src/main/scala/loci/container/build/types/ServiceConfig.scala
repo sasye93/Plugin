@@ -44,8 +44,6 @@ class ServiceConfig(json : Option[String], moduleConfig : Option[ModuleConfig])(
   def getEndpointMetadata : List[(String, String, String, Int)] = getTupleList("endpoints", 4).map(t => scala.util.Try{ (t.head.toString, t(2).toString, t(3).toString, Integer.parseInt(String.valueOf(t.last))) }.getOrElse(null)).filter(_ != null)
 
   def getServiceMetadata(d : TempLocation) : String = {
-    //todo implement
-    val api = d.entryPoint
     val service = d.getImageName
     def getConnectionDescriptions(filterNot : String) : String = {
       val cons = d.entryPoint.endPoints.filter(_.way != filterNot).map(e => Tuple4(e.way, e.method, e.connectionPeerSymbolString, e.port)) ++ d.entryPoint.config.getEndpointMetadata.filter(_._1 != filterNot)
@@ -82,7 +80,7 @@ object ServiceConfig{
     val description : String = "No description available for this service."
 
     // non docker specific without default
-    var localDb : Option[String] = None //todo: everything else, starting db, persistent /data storage, etc.
+    var localDb : Option[String] = None
     var localDbCredentials : Option[(String, String)] = None
 
     val JSON : String = {

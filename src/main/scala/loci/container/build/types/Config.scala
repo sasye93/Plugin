@@ -15,7 +15,6 @@ import loci.container.build.IO._
 
 abstract class Config(json : Option[String], homeDir : Option[String] = None)(implicit io : IO, implicit private val plugin : Containerize) {
 
-  //todo check and document if this works
   protected def loadConfig() : String = {
     val configFile : Option[File] = json match{
       case Some(cfg) =>
@@ -72,7 +71,7 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
       case Some(script) =>
         var f : File = io.resolvePath(script, getHome.orNull).orNull
         if(Check ? f && f.exists() && f.isFile) {
-          //todo make check if \r, but doesnt work, all of this doesnt work.
+          //todo make check if \r.
           f = io.buildFile(io.readFromFile(f), f.toPath, true, true).getOrElse(f)
           //logger.warning("The script you provided apparently does not have UNIX endings, which could prevent proper execution. It has been transformed automatically and might run properly, but you should manually check your script not to use \"\\r\" endings: " + f.getPath)
           Some(f)
@@ -85,11 +84,4 @@ abstract class Config(json : Option[String], homeDir : Option[String] = None)(im
   }
   def getCustomBaseImage : Option[String] = getStringOfKey("customBaseImage")
   var customBaseImage : Option[String] = None
-
-  /**
-   * todo: keep this global version? is referenced auf jeden fall in config below
-   * recommended:
-   * => jre-alpine
-   * => redis (smallest) or couchdb
-   */
 }

@@ -33,7 +33,7 @@ class ModuleConfig(json : Option[String])(implicit io : IO, implicit private val
     case Some("mongo") => Some("mongo:latest")
     case Some("mysql") => Some("mysql:latest")
     case Some("none") => None
-    case Some(db) => io.logger.warning(s"The option you supplied for globalDb in your module config is not supported and thus discarded: $db"); None //todo custom?
+    case Some(db) => io.logger.warning(s"The option you supplied for globalDb in your module config is not supported and thus discarded: $db"); None
     case None => None
   }
   def getGlobalDbCredentials : Option[(String, String)] = getTupleList("globalDbCredentials", 2).map(t => (t.head.toString, t.last.toString)).headOption.orElse(default.globalDbCredentials)
@@ -45,7 +45,7 @@ object ModuleConfig{
     val stateful : Boolean =  false
     val appName : String =  Options.swarmName
     val jreBaseImage : String = "jre" //"jre-alpine"
-    val globalDb : Option[String] = None //todo: everything else, starting db, persistent /data storage, etc.
+    val globalDb : Option[String] = None
     val globalDbCredentials : Option[(String, String)] = None
     val containerVolumeStorage : String = "/data"
 
@@ -55,7 +55,7 @@ object ModuleConfig{
          |  "jreBaseImage": "$jreBaseImage",
          |  "containerVolumeStorage": "$containerVolumeStorage"
          |}""".stripMargin
-    }//todo "plugin" replace, maybe just with _
+    }
 
   }
 }

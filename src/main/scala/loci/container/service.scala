@@ -124,8 +124,11 @@ object ServiceImpl {
                               "1.0", //version is currently not in use.
                               tpeType(_a).typeArgs.headOption match {
                                 case Some(prot) => prot match{
-                                  case p if p <:< c.typeOf[loci.communicator.tcp.TCP] => "TCP"
-                                  case prot if prot <:< c.typeOf[loci.communicator.ws.akka.WS] => "WebSocket"
+                                  //Recognition based on types is disabled because it requires the dependency only for this, which blows up jar size. Workaround used.
+                                  //case p if p <:< c.typeOf[loci.communicator.tcp.TCP] => "TCP"
+                                  //case prot if prot <:< c.typeOf[loci.communicator.ws.akka.WS] => "WebSocket"
+                                  case p if p.typeSymbol.fullName.contains("TCP") => "TCP"
+                                  case p if p.typeSymbol.fullName.contains("WS") => "WebSockets"
                                   case _ => "unknown"
                                 }
                                 case _ => "unknown"

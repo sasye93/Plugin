@@ -15,7 +15,6 @@ import scala.tools.nsc.plugins.{Plugin, PluginComponent}
 import scala.tools.nsc.{Global, util}
 
 //todo supports recursive project folder structure?
-//todo cmd is windows, use .sh?
 
 class Containerize(val global: Global) extends Plugin with java.io.Closeable {
 

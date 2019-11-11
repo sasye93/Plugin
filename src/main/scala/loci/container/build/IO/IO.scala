@@ -9,7 +9,6 @@ import java.io.{BufferedWriter, DataOutputStream, File, FileOutputStream, FileWr
 import java.nio.file.{FileAlreadyExistsException, Files, Path, Paths}
 
 import loci.container.build.{Check, Options}
-import loci.container.build.types.TempLocation
 
 import scala.io.{BufferedSource, Source}
 import scala.reflect.io.Directory
@@ -37,7 +36,7 @@ class IO(implicit val logger : Logger) {
       val obj : Pickle = upickle.default.read[Pickle](f)
       val o = obj match{
         case _ : T => obj.asInstanceOf[T]
-        case _ => throw new IOException(s"Wrong object type when deserializing: ${obj}")
+        case _ => throw new IOException(s"Wrong object type when de-serializing: ${obj}")
       }
       return Some(o)
     }

@@ -43,6 +43,6 @@ class Network(io : IO)(val name : String, buildDir : Path, network : INetwork = 
     io.buildFile(io.buildScript(CMD), Paths.get(networkDir.getAbsolutePath, getName + ".sh"))
   }
   def buildNetwork() : Unit = {
-    Process(s"bash $getName.sh", networkDir).!(plugin.logger)  //todo cmd is win, but not working without...? + cant get err stream because indirect
+    Process(s"bash $getName.sh", networkDir).!(plugin.logger)
   }
 }
