@@ -41,5 +41,6 @@ _loci.container.impl_: Contains the build stage (compiler plugin stage) implemen
 
 ## How to Use the Extension
 The extension provides the three annotations _@containerize_, _@service_ and _@gateway_ inside loci.container. See the thesis on how to use them.
+By default, images are pushed to scalalocicontainerize:thesis @ DockerHub.
 
 In case of errors, contact simon.schoenwaelder@gmx.de
