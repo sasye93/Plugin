@@ -2,7 +2,7 @@ The following describes how to install and use the containerization extension. T
 
 ## Prerequisites
 The containerization extension requires the following prerequisites:
-* Scala 2.12.8 with sbt (v1.3.0 tested and recommended, note that you might have to adjust _project/build.properties_ if you use a different version).
+* Scala 2.12.8 with sbt (1.3.0 tested)
 * ScalaLoci 0.3.0.
 * Scala macro support.
 * Windows 7+ (Win 7 & 10 tested, Linux and MacOS untested).
