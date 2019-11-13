@@ -23,8 +23,9 @@ class Runner(logger : Logger) {
    */
   def dockerIsRunning() : Boolean = Process("docker version").!(logger.weak) == 0
   def requirementsCheck() : Boolean = {
-    (Process("bash -lc \"echo 0\"").!(logger.weak) == 0) || {//orig: -> cmd /c bash -lc "echo 0"
-      Process("bash -lc \"echo 0\"").!(logger)
+    //todo: these calls are Windows specific.
+    (Process("cmd /c bash -lc \"echo 0\"").!(logger.weak) == 0) || {//orig: -> cmd /c bash -lc "echo 0"
+      Process("cmd /c bash -lc \"echo 0\"").!(logger)
       logger.error("Couldn't find bash command. This is probably due to missing bash shell support. Make sure you have a bash interpreter (e.g. cygwin64) installed.")
       false
     }
@@ -58,7 +59,8 @@ class Runner(logger : Logger) {
     * Login to the Docker registry host (default DockerHub).
     */
   def dockerLogin(username : String = Options.dockerUsername, password : String = Options.dockerPassword, host : String = Options.dockerHost) : Unit = {
-    if((Process("echo " + password + "") #| Process(s"docker login --username $username --password-stdin $host")).!(logger.weak) != 0){// -> orig: "cmd /c echo " + password + ""
+    if((Process("cmd /c echo " + password + "") #| Process(s"docker login --username $username --password-stdin $host")).!(logger.weak) != 0){// -> orig: "cmd /c echo " + password + ""
+      //todo: this call is Windows specific.
       logger.error(s"Login failed for ${ if(host == "") "DockerHub" else host }, please check you supplied the correct credentials via the dockerUsername (${ Options.dockerUsername }) and dockerPassword compiler options.")
     }
   }

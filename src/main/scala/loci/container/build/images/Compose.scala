@@ -385,7 +385,8 @@ class Compose(io : IO)(buildDir : File)(implicit plugin : Containerize) {
       }
     }
     def runDockerSwarm() : Unit = {
-      Process("bash swarm-init.sh", composePath).run() //orig: -> cmd /k start bash swarm-init.sh
+      Process("cmd /k bash swarm-init.sh", composePath).run() //orig: -> cmd /k start bash swarm-init.sh
+      //todo: this call is Windows specific.
       //orig call: cmd /k start bash swarm-init.sh
     }
   }
