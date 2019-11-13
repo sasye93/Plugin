@@ -11,7 +11,7 @@ The containerization extension requires the following prerequisites:
 
 ## Important addition (this was not mentioned in the thesis document):
 * Note that you need JDK (11 & 12 tested) installed. JRE is not sufficient, because the extension needs the jar executable for building the jar files.
-* **Caution**: Don't use JDK 13, it has a known bug on Scala macros and will result in the compiler crashing (https://github.com/scala/bug/issues/11608).
+* **Caution**: Don't use JDK 13/14, it has a known bug on Scala macros and will result in the compiler crashing (https://github.com/scala/bug/issues/11608).
 * java ENV variables must be properly set (+ /bin added to PATH var).
 
 ## Repositories
@@ -38,7 +38,9 @@ Now, one can import loci.container._ inside the project where ever the extension
 
 ## Build the project
 There is no difference to conventional ScalaLoci projects when building (respectively compiling) a containerized project. The extension steps in when the compilation of a project is triggered. You can do this e.g. using _sbt compile_ or inside an IDE. While building, the Docker daemon must be running and reachable on the host. Note however, that one cannot directly run the result of the containerization process using _sbt run_, _scala_ or the run command inside the IDE, because this will just run the compiled code, not the containerized results. Instead, the extension will create all the files and output during build, which can then be used.
-If one wants to rebuild the extension from source code, the easiest way to do so is to create a fat jar using _sbt assembly_ and re-add _project/scalac-plugin.xml_ to its top level directory.
+
+### Rebuild from source code
+If one wants to rebuild the extension from source code, the easiest way to do so is to create a fat jar by running _sbt assembly_ from inside the project dir. Then, re-add _project/scalac-plugin.xml_ to the jar's top level directory (only if you change the main plugin class loci/container/build/main/Containerize, you have to adjust it). The generated jar will be in target/scala-2.12/.
 
 ## Structure
 _loci.container_: Contains the macro implementations.
