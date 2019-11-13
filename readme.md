@@ -10,7 +10,8 @@ The containerization extension requires the following prerequisites:
 * Bash script support (.sh) on your machine. The bash shell is built-in on Linux, MacOS and partially on Windows 10. On Windows 7 or older, you can use an emulator like cygwin64. To install it on Win10, see e.g. https://itsfoss.com/install-bash-on-windows/, or also use an emulator.
 
 ## Important addition (this is not mentioned in the thesis document):
-* Note that you need JDK (v12 tested) installed. JRE is not sufficient, because the extension needs the jar executable for building the jar files.
+* Note that you need JDK (11 & 12 tested) installed. JRE is not sufficient, because the extension needs the jar executable for building the jar files.
+* **Caution**: Don't use JDK 13, it has a known bug on Scala macros and will result in the compiler crashing (https://github.com/scala/bug/issues/11608).
 * java ENV variables must be properly set (+ /bin added to PATH var).
 
 ## Repositories
