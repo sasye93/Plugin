@@ -7,7 +7,9 @@ The containerization extension requires the following prerequisites:
 * Scala macro support.
 * Windows 7+ (Win 7 & 10 tested, Linux and MacOS untested).
 * Docker installed (Docker for Windows/Mac, or Docker Toolbox for Windows 7 or older), and a _running_ Docker daemon (Docker Machine).
-* Bash script support (.sh) on your machine. The bash shell is built-in on Linux, MacOS and partially on Windows 10. On Windows 7 or older, you can use an emulator like cygwin64. To install it on Win10, see e.g. https://itsfoss.com/install-bash-on-windows/, or also use an emulator.
+* Bash script support (.sh) on your machine. The bash shell is built-in on Linux, MacOS. On Windows, you can use an emulator like cygwin64.
+
+Note: On Win10, one can also use a subsystem linux to enable bash, see e.g. https://itsfoss.com/install-bash-on-windows/ on how to do it. However, if you use a subsystem, you must make sure that the necessary commands are available there, especially docker installed. Therefore, it is easier to just install cygwin or similar.
 
 ## Important addition (this was not mentioned in the thesis document):
 * Note that you need JDK (11 & 12 tested) installed. JRE is not sufficient, because the extension needs the jar executable for building the jar files.
