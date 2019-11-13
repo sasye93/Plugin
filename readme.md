@@ -5,7 +5,7 @@ The containerization extension requires the following prerequisites:
 * Scala 2.12.8 with sbt (1.3.0 tested).
 * ScalaLoci 0.3.0.
 * Scala macro support.
-* Windows 7+ (Linux and MacOS untested).
+* Windows 7+ (Win 7&10 tested, Linux and MacOS untested).
 * Docker installed (Docker for Windows/Mac, or Docker Toolbox for Windows 7 or older), and a \underline{running} Docker daemon (Docker Machine).
 * Bash script support (.sh) on your machine. The bash shell is built-in on Linux, MacOS and partially on Windows 10. On Windows 7 or older, you can use an emulator like cygwin64. To install it on Win10, see e.g. https://itsfoss.com/install-bash-on-windows/, or also use an emulator.
 
