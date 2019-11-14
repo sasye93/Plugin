@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Plugin.scala-loci-containerize-extension.iml" filepath="$PROJECT_DIR$/.idea/modules/Plugin.scala-loci-containerize-extension.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/scala-loci-containerize-extension.iml" filepath="$PROJECT_DIR$/.idea/modules/scala-loci-containerize-extension.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/scala-loci-containerize-extension-build.iml" filepath="$PROJECT_DIR$/.idea/modules/scala-loci-containerize-extension-build.iml" />
     </modules>
